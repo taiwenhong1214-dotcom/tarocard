@@ -43,7 +43,7 @@ module.exports = async function handler(req, res) {
           "Authorization": `Bearer ${apiKey}` // DeepSeek 使用 Bearer 鉴权
         },
         body: JSON.stringify({
-          model: "deepseek-chat", // DeepSeek 的通用大模型
+          model: "deepseek-v4-flash", // DeepSeek 的通用大模型
           messages: [
             { role: "user", content: prompt }
           ],
