@@ -1000,9 +1000,12 @@ class _ReadingScreenState extends State<ReadingScreen> {
                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(30)),
                 ),
                 onPressed: () async {
-                  final uri = Uri.parse(url);
-                  if (await canLaunchUrl(uri)) {
+                  try {
+                    final uri = Uri.parse(url);
+                    // 直接强制调用外部浏览器，无需提前询问系统
                     await launchUrl(uri, mode: LaunchMode.externalApplication);
+                  } catch (e) {
+                    debugPrint("跳转浏览器失败，可能是链接不合法或设备没有浏览器: $e");
                   }
                 },
                 child: const Text('✨ 前往下载更新', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
