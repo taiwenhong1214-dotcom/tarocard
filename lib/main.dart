@@ -74,7 +74,7 @@ final List<SpreadConfig> availableSpreads = [
     positions: ['面临的核心问题', '选择 A 的发展现状', '选择 B 的发展现状', '选择 A 的最终结果', '选择 B 的最终结果'],
   ),
   SpreadConfig(
-    name: '凯尔特-十字 (10张)',
+    name: '凯尔特十字 (10张)',
     description: '最经典的塔罗牌阵，包含中央十字与右侧立柱。全方位深度剖析复杂问题。',
     positions: [
       '当前现状', '面临的障碍(横放)', '潜意识 / 现实基础', '过去的影响',
@@ -131,7 +131,7 @@ class _HomeScreenState extends State<HomeScreen> {
   String selectedTopic = availableTopics[0];
   SpreadConfig selectedSpread = availableSpreads[0];
 
-  final String currentAppVersion = '2.0.3';
+  final String currentAppVersion = '2.0.4';
 
   @override
   void initState() {
@@ -903,7 +903,7 @@ class _ReadingScreenState extends State<ReadingScreen> {
         Uri.parse(_proxyUrl),
         headers: {
           'Content-Type': 'application/json',
-          'x-app-version': '2.0.3', // 👈 已经帮你改成了 2.0.1！
+          'x-app-version': '2.0.4', // 👈 已经帮你改成了 2.0.1！
         },
         body: jsonEncode({"prompt": prompt}),
       );
