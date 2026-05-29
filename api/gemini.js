@@ -24,41 +24,48 @@ module.exports = async function handler(req, res) {
       return res.status(400).json({ error: "Missing prompt" });
     }
 
-    // 获取我们刚刚在 Vercel 填写的 DeepSeek Key
-    const apiKey = process.env.DEEPSEEK_API_KEY;
+    // 获取在 Vercel 填写的 OpenRouter Key
+    const apiKey = process.env.OPENROUTER_API_KEY;
 
     if (!apiKey) {
       return res.status(500).json({
-        error: "Missing DEEPSEEK_API_KEY in Vercel Environment Variables"
+        error: "Missing OPENROUTER_API_KEY in Vercel Environment Variables"
       });
     }
 
-    // 🌟 核心改动：向 DeepSeek API 发送请求 (兼容 OpenAI 格式)
-    const deepseekRes = await fetch(
-      "https://api.deepseek.com/chat/completions",
+    // 🌟 核心改动：向 OpenRouter API 发送请求并配置最新模型队列
+    const openRouterRes = await fetch(
+      "https://openrouter.ai",
       {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          "Authorization": `Bearer ${apiKey}` // DeepSeek 使用 Bearer 鉴权
+          "Authorization": `Bearer ${apiKey}`,
+          "HTTP-Referer": "https://vercel.com", 
+          "X-Title": "Tarot App" 
         },
         body: JSON.stringify({
-          model: "deepseek-v4-flash", // DeepSeek 的通用大模型
+          // 🔄 自动降级队列：按首选顺序排列。前一个触发限流或下线时，OpenRouter 会直接切到下一个。
+          models: [
+            "google/gemini-3.5-flash",    // 1. 首选：谷歌最新主力模型
+            "qwen/qwen3.7-max",           // 2. 备选：通义千问最新旗舰模型
+            "stepfun/step-3.5-flash"       // 3. 垫底：阶跃星辰最新极速模型
+          ],
           messages: [
             { role: "user", content: prompt }
           ],
-          temperature: 0.7 // 设为 0.7 让塔罗牌解读更有灵性和创造力
+          temperature: 0.7 
         })
       }
     );
 
-    const data = await deepseekRes.json();
+    const data = await openRouterRes.json();
 
-    if (!deepseekRes.ok) {
-      return res.status(deepseekRes.status).json(data);
+    if (!openRouterRes.ok) {
+      return res.status(openRouterRes.status).json(data);
     }
 
-    // 🌟 核心改动：解析 DeepSeek 的返回格式
+    // 解析 OpenRouter 的返回格式
     const text = data?.choices?.[0]?.message?.content || "占卜师暂时无法解读，请稍后再试。";
 
     return res.status(200).json({ text });
