@@ -9,7 +9,7 @@ module.exports = async function handler(req, res) {
   }
 
   // 🔒 拒绝旧版 App（版本号拦截）
-  if (req.headers['x-app-version'] !== '2.0.1') {
+  if (req.headers['x-app-version'] !== '2.0.2') {
     return res.status(403).json({ error: "请更新 App 才能继续使用" });
   }
 
