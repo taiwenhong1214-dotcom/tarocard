@@ -48,8 +48,8 @@ module.exports = async function handler(req, res) {
           // 🔄 自动降级队列：按首选顺序排列。前一个触发限流或下线时，OpenRouter 会直接切到下一个。
           models: [
             "stepfun/step-3.5-flash", //阶跃星辰最新极速模型
-            "google/gemini-3.5-flash",    // 1. 首选：谷歌最新主力模型
-            "qwen/qwen3.7-max"          // 2. 备选：通义千问最新旗舰模型
+            "deepseek/deepseek-v4-flash",    // 1. 首选：谷歌最新主力模型
+            "qwen/qwen3.6-flash"          // 2. 备选：通义千问最新旗舰模型
           ],
           messages: [
             { role: "user", content: prompt }
