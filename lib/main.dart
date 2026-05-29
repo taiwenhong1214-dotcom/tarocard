@@ -64,7 +64,7 @@ final List<SpreadConfig> availableSpreads = [
     positions: ['过去的影响', '现在的状况', '未来的发展'],
   ),
   SpreadConfig(
-    name: '大十字展开法 (5张)',
+    name: '大十字(+)展开法 (5张)',
     description: '呈完美的十字形状，剖析特定事件的核心、阻力、助力及深层原因。',
     positions: ['核心现状', '过去影响 / 阻力', '未来发展 / 助力', '显意识 / 理想目标', '潜意识 / 现实基础'],
   ),
@@ -131,7 +131,7 @@ class _HomeScreenState extends State<HomeScreen> {
   String selectedTopic = availableTopics[0];
   SpreadConfig selectedSpread = availableSpreads[0];
 
-  final String currentAppVersion = '2.0.6';
+  final String currentAppVersion = '2.0.7';
 
   @override
   void initState() {
@@ -903,7 +903,7 @@ class _ReadingScreenState extends State<ReadingScreen> {
         Uri.parse(_proxyUrl),
         headers: {
           'Content-Type': 'application/json',
-          'x-app-version': '2.0.6', // 👈 已经帮你改成了 2.0.1！
+          'x-app-version': '2.0.7', // 👈 已经帮你改成了 2.0.1！
         },
         body: jsonEncode({"prompt": prompt}),
       );
