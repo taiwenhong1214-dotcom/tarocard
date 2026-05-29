@@ -61,7 +61,7 @@ class SpreadConfig {
 // 🔮 四大经典专业法阵
 final List<SpreadConfig> availableSpreads = [
   SpreadConfig(
-    name: '圣三角牌阵 (3张)',
+    name: '圣三角-牌阵 (3张)',
     description: '最经典的入门牌阵，呈倒三角排列。适合每日运势或快速提问。',
     positions: ['过去的影响', '现在的状况', '未来的发展'],
   ),
