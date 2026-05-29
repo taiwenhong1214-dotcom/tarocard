@@ -929,7 +929,7 @@ class _ReadingScreenState extends State<ReadingScreen> {
           downloadUrl = remoteConfig.getString('apk_download_url');
           
           if (downloadUrl.isEmpty) {
-            downloadUrl = "https://github.com/wenhong1214/tarocard/releases/download/2.0.7/app-release.apk"; 
+            downloadUrl = "https://github.com/wenhong1214/tarocard/releases"; 
           }
           if (mounted) _showForceUpdateDialog(downloadUrl);
           
@@ -937,7 +937,7 @@ class _ReadingScreenState extends State<ReadingScreen> {
           debugPrint("🚨 Firebase 请求卡死或超时，启用保底弹窗: $e");
           // 哪怕 Firebase 彻底坏了，3秒后也一定会强制弹窗！
           if (mounted) {
-            _showForceUpdateDialog("https://github.com/wenhong1214/tarocard/releases/download/2.0.7/app-release.apk");
+            _showForceUpdateDialog("https://github.com/wenhong1214/tarocard/releases");
           }
         }
       }
