@@ -47,9 +47,9 @@ module.exports = async function handler(req, res) {
         body: JSON.stringify({
           // 🔄 自动降级队列：按首选顺序排列。前一个触发限流或下线时，OpenRouter 会直接切到下一个。
           models: [
-            "anthropic/claude-opus-4.8:fast", //阶跃星辰最新极速模型
-            "openai/gpt-5.4-nano",    // 1. 首选：谷歌最新主力模型
-            "deepseek/deepseek-v4-flash"          // 2. 备选：通义千问最新旗舰模型
+            "deepseek/deepseek-chat",
+            "google/gemini-2.0-flash-001",
+            "mistralai/mistral-small-3.1-24b"
           ],
           messages: [
             { role: "user", content: prompt }
