@@ -49,7 +49,7 @@ module.exports = async function handler(req, res) {
           models: [
             "deepseek/deepseek-chat",
             "google/gemini-2.0-flash-001",
-            "mistralai/mistral-small-3.1-24b"
+            "openai/gpt-5.4-nano"
           ],
           messages: [
             { role: "user", content: prompt }
