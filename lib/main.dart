@@ -3,7 +3,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter_markdown/flutter_markdown.dart';
 import 'dart:convert';
 import 'package:http/http.dart' as http;
-import 'package:url_launcher/url_launcher.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_remote_config/firebase_remote_config.dart';
 import 'firebase_options.dart'; // 👈 记得确认有导入这个文件
@@ -22,6 +21,7 @@ Future<void> main() async {
   
   runApp(const TarotApp());
 }
+
 class TarotApp extends StatelessWidget {
   const TarotApp({Key? key}) : super(key: key);
 
@@ -33,7 +33,7 @@ class TarotApp extends StatelessWidget {
         brightness: Brightness.dark,
         primaryColor: const Color(0xFF673AB7),
         scaffoldBackgroundColor: const Color(0xFF0F0C1B),
-        fontFamily: 'serif', // 全局使用衬线字体增加神秘感
+        fontFamily: 'serif',
         appBarTheme: const AppBarTheme(
           backgroundColor: Colors.transparent,
           elevation: 0,
@@ -46,59 +46,179 @@ class TarotApp extends StatelessWidget {
   }
 }
 
+// ================= 全局语言支持 =================
+enum AppLanguage { zh, en, ms }
+
+String tr(AppLanguage lang, String zh, String en, String ms) {
+  if (lang == AppLanguage.en) return en;
+  if (lang == AppLanguage.ms) return ms;
+  return zh;
+}
+
 // ================= 数据模型与四大经典牌阵配置 =================
 
 class SpreadConfig {
-  final String name;
-  final List<String> positions;
-  final String description;
+  final String nameZh;
+  final String nameEn;
+  final String nameMs;
+  final List<String> positionsZh;
+  final List<String> positionsEn;
+  final List<String> positionsMs;
+  final String descriptionZh;
+  final String descriptionEn;
+  final String descriptionMs;
 
-  SpreadConfig({required this.name, required this.positions, required this.description});
+  SpreadConfig({
+    required this.nameZh,
+    required this.nameEn,
+    required this.nameMs,
+    required this.positionsZh,
+    required this.positionsEn,
+    required this.positionsMs,
+    required this.descriptionZh,
+    required this.descriptionEn,
+    required this.descriptionMs,
+  });
+
+  String name(AppLanguage lang) {
+    if (lang == AppLanguage.en) return nameEn;
+    if (lang == AppLanguage.ms) return nameMs;
+    return nameZh;
+  }
+  
+  String description(AppLanguage lang) {
+    if (lang == AppLanguage.en) return descriptionEn;
+    if (lang == AppLanguage.ms) return descriptionMs;
+    return descriptionZh;
+  }
+  
+  List<String> positions(AppLanguage lang) {
+    if (lang == AppLanguage.en) return positionsEn;
+    if (lang == AppLanguage.ms) return positionsMs;
+    return positionsZh;
+  }
 }
 
-// 🔮 四大经典专业法阵
+class Topic {
+  final String zh;
+  final String en;
+  final String ms;
+
+  const Topic({required this.zh, required this.en, required this.ms});
+
+  String text(AppLanguage lang) {
+    if (lang == AppLanguage.en) return en;
+    if (lang == AppLanguage.ms) return ms;
+    return zh;
+  }
+}
+
 final List<SpreadConfig> availableSpreads = [
   SpreadConfig(
-    name: '圣三角牌阵 (3张)',
-    description: '最经典的入门牌阵，呈倒三角排列。适合每日运势或快速提问。',
-    positions: ['显意识 / 外部现状', '潜意识 / 隐性阻碍', '破局点 / 核心建议'],
+    nameZh: '圣三角牌阵 (3张)',
+    nameEn: 'Holy Triangle Spread (3 cards)',
+    nameMs: 'Susunan Segitiga Suci (3 kad)',
+    descriptionZh: '最经典的入门牌阵，呈倒三角排列。适合每日运势或快速提问。',
+    descriptionEn: 'A classic beginner spread in an inverted triangle. Best for daily fortune or quick questions.',
+    descriptionMs: 'Susunan klasik untuk pemula dalam bentuk segitiga terbalik. Sesuai untuk nasib harian atau soalan pantas.',
+    positionsZh: ['显意识 / 外部现状', '潜意识 / 隐性阻碍', '破局点 / 核心建议'],
+    positionsEn: ['Conscious / External Situation', 'Subconscious / Hidden Obstacle', 'Breakthrough / Core Advice'],
+    positionsMs: ['Sedar / Situasi Luaran', 'Bawah Sedar / Halangan Tersembunyi', 'Titik Kejayaan / Nasihat Utama'],
   ),
   SpreadConfig(
-    name: '大十字展开法 (5张)',
-    description: '呈完美的十字形状，剖析特定事件的核心、阻力、助力及深层原因。',
-    positions: ['最终结果', '外在环境的有利因素 / 帮助', '外在环境的阻碍 / 挑战', '问题的原因 / 心理根源', '最主要的解决方法 / 核心对策'],
+    nameZh: '大十字展开法 (5张)',
+    nameEn: 'Grand Cross Layout (5 cards)',
+    nameMs: 'Susunan Salib Besar (5 kad)',
+    descriptionZh: '呈完美的十字形状，剖析特定事件的核心、阻力、助力及深层原因。',
+    descriptionEn: 'A perfect cross layout that reveals the core, resistance, support and deep roots of a specific event.',
+    descriptionMs: 'Susunan salib yang sempurna yang mendedahkan inti, rintangan, sokongan dan akar mendalam peristiwa tertentu.',
+    positionsZh: ['最终结果', '外在环境的有利因素 / 帮助', '外在环境的阻碍 / 挑战', '问题的原因 / 心理根源', '最主要的解决方法 / 核心对策'],
+    positionsEn: ['Outcome', 'External Support / Help', 'External Obstacle / Challenge', 'Cause / Mental Root', 'Main Solution / Core Strategy'],
+    positionsMs: ['Hasil', 'Sokongan Luaran / Bantuan', 'Halangan Luaran / Cabaran', 'Punca / Akar Mental', 'Penyelesaian Utama / Strategi Teras'],
   ),
   SpreadConfig(
-    name: '二择一展开法 (5张)',
-    description: '呈 Y 字形分支，面临抉择时专门针对“做决定”设计的牌阵。',
-    positions: ['求问者现状', '选择 A 的发展现状', '选择 B 的发展现状', '选择 A 的最终结果', '选择 B 的最终结果'],
+    nameZh: '二择一展开法 (5张)',
+    nameEn: 'Choice Spread (5 cards)',
+    nameMs: 'Susunan Pilihan (5 kad)',
+    descriptionZh: '呈 Y 字形分支，面临抉择时专门针对“做决定”设计的牌阵。',
+    descriptionEn: 'A Y-shaped spread crafted for decision-making questions and evaluating two options.',
+    descriptionMs: 'Susunan berbentuk Y yang direka untuk soalan membuat keputusan dan menilai dua pilihan.',
+    positionsZh: ['求问者现状', '选择 A 的发展现状', '选择 B 的发展现状', '选择 A 的最终结果', '选择 B 的最终结果'],
+    positionsEn: ['Querent Situation', 'Option A Current Path', 'Option B Current Path', 'Option A Outcome', 'Option B Outcome'],
+    positionsMs: ['Situasi Penanya', 'Laluan Semasa Pilihan A', 'Laluan Semasa Pilihan B', 'Hasil Pilihan A', 'Hasil Pilihan B'],
   ),
   SpreadConfig(
-    name: '凯尔特十字 (10张)',
-    description: '最经典的塔罗牌阵，包含中央十字与右侧立柱。全方位深度剖析复杂问题。',
-    positions: [
+    nameZh: '凯尔特十字 (10张)',
+    nameEn: 'Celtic Cross (10 cards)',
+    nameMs: 'Salib Celtic (10 kad)',
+    descriptionZh: '最经典的塔罗牌阵，包含中央十字与右侧立柱。全方位深度剖析复杂问题。',
+    descriptionEn: 'The classic Celtic Cross with a central cross and right-side pillar for deep analysis of complex issues.',
+    descriptionMs: 'Salib Celtic klasik dengan salib di tengah dan tiang di sebelah kanan untuk analisis mendalam isu yang kompleks.',
+    positionsZh: [
       '当前现状', '面临的障碍(横放)', '潜意识 / 现实基础', '过去的影响',
       '显意识 / 理想目标', '不久的未来', 
       '当事人状态', '环境/他人影响', '希望与恐惧', '最终结果' 
     ],
+    positionsEn: [
+      'Current Situation', 'Obstacle (Crossed)', 'Subconscious / Foundation', 'Past Influence',
+      'Conscious / Ideal Goal', 'Near Future',
+      'Self State', 'Environment / External Influence', 'Hopes & Fears', 'Final Outcome'
+    ],
+    positionsMs: [
+      'Situasi Semasa', 'Halangan (Menyilang)', 'Bawah Sedar / Asas', 'Pengaruh Masa Lalu',
+      'Sedar / Matlamat Ideal', 'Masa Depan Terdekat',
+      'Keadaan Diri', 'Persekitaran / Pengaruh Luaran', 'Harapan & Ketakutan', 'Hasil Akhir'
+    ],
   ),
 ];
 
-final List<String> availableTopics = ['综合运势', '爱情与感情', '事业与工作', '金钱与财富', '身心健康'];
+final List<Topic> availableTopics = const [
+  Topic(zh: '综合运势', en: 'General Fortune', ms: 'Nasib Umum'),
+  Topic(zh: '爱情与感情', en: 'Love & Relationship', ms: 'Cinta & Hubungan'),
+  Topic(zh: '事业与工作', en: 'Career & Work', ms: 'Kerjaya & Pekerjaan'),
+  Topic(zh: '金钱与财富', en: 'Money & Wealth', ms: 'Wang & Kekayaan'),
+  Topic(zh: '身心健康', en: 'Health & Wellbeing', ms: 'Kesihatan & Kesejahteraan'),
+];
 
 class TarotCard {
-  final String name;
+  final String nameZh;
+  final String nameEn;
+  final String nameMs;
   final String number;
   final String arcana;
   final String? suit;
   final String img;
-  final String uprightMeaning;
-  final String reversedMeaning;
+  final String uprightZh;
+  final String uprightEn;
+  final String uprightMs;
+  final String reversedZh;
+  final String reversedEn;
+  final String reversedMs;
 
   TarotCard({
-    required this.name, required this.number, required this.arcana, this.suit,
-    required this.img, required this.uprightMeaning, required this.reversedMeaning,
+    required this.nameZh, required this.nameEn, required this.nameMs,
+    required this.number, required this.arcana, this.suit, required this.img,
+    required this.uprightZh, required this.uprightEn, required this.uprightMs,
+    required this.reversedZh, required this.reversedEn, required this.reversedMs,
   });
+
+  String name(AppLanguage lang) {
+    if (lang == AppLanguage.en) return nameEn;
+    if (lang == AppLanguage.ms) return nameMs;
+    return nameZh;
+  }
+
+  String uprightMeaning(AppLanguage lang) {
+    if (lang == AppLanguage.en) return uprightEn;
+    if (lang == AppLanguage.ms) return uprightMs;
+    return uprightZh;
+  }
+
+  String reversedMeaning(AppLanguage lang) {
+    if (lang == AppLanguage.en) return reversedEn;
+    if (lang == AppLanguage.ms) return reversedMs;
+    return reversedZh;
+  }
 }
 
 class DrawnCard {
@@ -111,15 +231,23 @@ class DrawnCard {
 
 final List<TarotCard> tarotDeck = rawTarotData.map((data) {
   return TarotCard(
-    name: data['name'], number: data['number'], arcana: data['arcana'],
-    suit: data['suit'], img: data['img'],
-    uprightMeaning: data['upright'] ?? "解析加载中...",
-    reversedMeaning: data['reversed'] ?? "解析加载中...",
+    nameZh: data['nameZh'] ?? "",
+    nameEn: data['nameEn'] ?? "",
+    nameMs: data['nameMs'] ?? "",
+    number: data['number'] ?? "",
+    arcana: data['arcana'] ?? "",
+    suit: data['suit'],
+    img: data['img'] ?? "",
+    uprightZh: data['uprightZh'] ?? "解析加载中...",
+    uprightEn: data['uprightEn'] ?? "Meaning loading...",
+    uprightMs: data['uprightMs'] ?? "Maksud sedang dimuatkan...",
+    reversedZh: data['reversedZh'] ?? "解析加载中...",
+    reversedEn: data['reversedEn'] ?? "Meaning loading...",
+    reversedMs: data['reversedMs'] ?? "Maksud sedang dimuatkan...",
   );
 }).toList();
 
-
-// ================= 1. 首页 (高颜值 UI 优化) =================
+// ================= 1. 首页 =================
 class HomeScreen extends StatefulWidget {
   const HomeScreen({Key? key}) : super(key: key);
 
@@ -128,7 +256,8 @@ class HomeScreen extends StatefulWidget {
 }
 
 class _HomeScreenState extends State<HomeScreen> {
-  String selectedTopic = availableTopics[0];
+  AppLanguage currentLanguage = AppLanguage.zh;
+  Topic selectedTopic = availableTopics[0];
   SpreadConfig selectedSpread = availableSpreads[0];
 
   final String currentAppVersion = '2.1.0';
@@ -136,100 +265,68 @@ class _HomeScreenState extends State<HomeScreen> {
   @override
   void initState() {
     super.initState();
-    _checkVersion(); // 启动时自动检查版本
+    _checkVersion(); 
   }
 
-  // 👇 使用 Firebase Remote Config 检查版本
   Future<void> _checkVersion() async {
     try {
       final remoteConfig = FirebaseRemoteConfig.instance;
-      
-      // 配置抓取策略（开发时设为0可以立刻看到效果，发布线上建议设为 1 或 12 小时）
       await remoteConfig.setConfigSettings(RemoteConfigSettings(
         fetchTimeout: const Duration(minutes: 1),
-        minimumFetchInterval: const Duration(seconds: 0), // 开发测试时设为0，上线可改为 Duration(hours: 1)
+        minimumFetchInterval: const Duration(seconds: 0),
       ));
-
-      // 设置默认值（防止断网时读不到数据崩溃）
-      await remoteConfig.setDefaults(const {
-        "latest_app_version": "1.0.0",
+      await remoteConfig.setDefaults({
+        "latest_app_version": currentAppVersion,
         "apk_download_url": "",
       });
-
-      // 从 Firebase 云端拉取最新配置并激活
       await remoteConfig.fetchAndActivate();
-
-      // 获取你在 Firebase Console 里填写的参数
       String latestVersion = remoteConfig.getString('latest_app_version');
-      String downloadUrl = remoteConfig.getString('apk_download_url');
-
-      debugPrint("当前版本: $currentAppVersion, 云端最新版本: $latestVersion");
-
-      // 如果云端最新版本和当前版本不同，则弹出强制更新框
-      if (latestVersion.isNotEmpty && latestVersion != currentAppVersion) {
-        _showForceUpdateDialog(downloadUrl);
-      }
+      // Force update dialog disabled for testing - downloadUrl not needed
+      debugPrint("🔮 Version check skipped (testing). fetched: '$latestVersion'");
     } catch (e) {
       debugPrint("Firebase 版本检查失败: $e");
     }
   }
-
-  void _showForceUpdateDialog(String url) {
-    showDialog(
-      context: context,
-      barrierDismissible: false, // 禁止点击弹窗外部关闭
-      builder: (context) {
-        return PopScope(
-          canPop: false, // 禁用安卓物理返回键关闭
-          child: AlertDialog(
-            backgroundColor: const Color(0xFF1E112A),
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(16),
-              side: const BorderSide(color: Colors.amber, width: 1.5),
-            ),
-            title: const Row(
-              children: [
-                Icon(Icons.system_update_alt, color: Colors.amber),
-                SizedBox(width: 10),
-                Text('结界升级提示', style: TextStyle(color: Colors.amber, fontWeight: FontWeight.bold)),
-              ],
-            ),
-            content: const Text(
-              '为了保证占卜灵境的稳定与准确，请务必更新至最新版本以继续探索天机。',
-              style: TextStyle(color: Colors.white70, fontSize: 16, height: 1.5),
-            ),
-            actionsAlignment: MainAxisAlignment.center,
-            actions: [
-              ElevatedButton(
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: Colors.amber,
-                  foregroundColor: Colors.black,
-                  padding: const EdgeInsets.symmetric(horizontal: 30, vertical: 14),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(30)),
-                ),
-                onPressed: () async {
-                  final uri = Uri.parse(url);
-                  if (await canLaunchUrl(uri)) {
-                    await launchUrl(uri, mode: LaunchMode.externalApplication);
-                  }
-                },
-                child: const Text('✨ 前往下载更新', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
-              ),
-            ],
-          ),
-        );
-      },
-    );
-  }
-  
-  // ... build 方法保持不变
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       extendBodyBehindAppBar: true,
       appBar: AppBar(
-        title: const Text('塔 罗 灵 境', style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold, letterSpacing: 4, color: Colors.amber)),
+        title: Text(tr(currentLanguage, '塔 罗 灵 境', 'Tarot Realm', 'Dunia Tarot'), style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold, letterSpacing: 4, color: Colors.amber)),
+        actions: [
+          PopupMenuButton<AppLanguage>(
+            onSelected: (AppLanguage result) {
+              setState(() {
+                currentLanguage = result;
+              });
+            },
+            icon: const Icon(Icons.language, color: Colors.amber),
+            itemBuilder: (BuildContext context) => <PopupMenuEntry<AppLanguage>>[
+              const PopupMenuItem<AppLanguage>(
+                value: AppLanguage.zh,
+                child: Text('中文 (Chinese)'),
+              ),
+              const PopupMenuItem<AppLanguage>(
+                value: AppLanguage.en,
+                child: Text('English'),
+              ),
+              const PopupMenuItem<AppLanguage>(
+                value: AppLanguage.ms,
+                child: Text('Bahasa Melayu'),
+              ),
+            ],
+          ),
+          Center(
+            child: Padding(
+              padding: const EdgeInsets.only(right: 16.0),
+              child: Text(
+                currentLanguage == AppLanguage.zh ? '中文' : currentLanguage == AppLanguage.en ? 'EN' : 'BM',
+                style: const TextStyle(color: Colors.amber, fontWeight: FontWeight.bold),
+              ),
+            ),
+          )
+        ],
       ),
       body: Container(
         decoration: const BoxDecoration(
@@ -247,14 +344,14 @@ class _HomeScreenState extends State<HomeScreen> {
               children: [
                 const Center(child: Icon(Icons.auto_awesome, size: 50, color: Colors.amber)),
                 const SizedBox(height: 10),
-                const Text('开启你的占卜结界', textAlign: TextAlign.center, style: TextStyle(fontSize: 18, color: Colors.white70)),
+                Text(tr(currentLanguage, '开启你的占卜结界', 'Open your divination realm', 'Buka alam tenung nasib anda'), textAlign: TextAlign.center, style: const TextStyle(fontSize: 18, color: Colors.white70)),
                 const SizedBox(height: 40),
                 
                 Row(
-                  children: const [
-                    Icon(Icons.category, color: Colors.amber, size: 20),
-                    SizedBox(width: 8),
-                    Text('你想占卜什么？', style: TextStyle(fontSize: 18, color: Colors.amber, fontWeight: FontWeight.bold)),
+                  children: [
+                    const Icon(Icons.category, color: Colors.amber, size: 20),
+                    const SizedBox(width: 8),
+                    Text(tr(currentLanguage, '你想占卜什么？', 'What would you like to ask?', 'Apa yang anda ingin tanya?'), style: const TextStyle(fontSize: 18, color: Colors.amber, fontWeight: FontWeight.bold)),
                   ],
                 ),
                 const SizedBox(height: 15),
@@ -274,7 +371,7 @@ class _HomeScreenState extends State<HomeScreen> {
                           border: Border.all(color: isSelected ? Colors.amber : Colors.transparent, width: 1.5),
                           boxShadow: isSelected ? [BoxShadow(color: Colors.amber.withOpacity(0.3), blurRadius: 8, spreadRadius: 1)] : [],
                         ),
-                        child: Text(topic, style: TextStyle(color: isSelected ? Colors.white : Colors.white54, fontSize: 15, fontWeight: isSelected ? FontWeight.bold : FontWeight.normal)),
+                        child: Text(topic.text(currentLanguage), style: TextStyle(color: isSelected ? Colors.white : Colors.white54, fontSize: 15, fontWeight: isSelected ? FontWeight.bold : FontWeight.normal)),
                       ),
                     );
                   }).toList(),
@@ -282,10 +379,10 @@ class _HomeScreenState extends State<HomeScreen> {
                 const SizedBox(height: 40),
 
                 Row(
-                  children: const [
-                    Icon(Icons.dashboard_customize, color: Colors.amber, size: 20),
-                    SizedBox(width: 8),
-                    Text('请选择灵力法阵', style: TextStyle(fontSize: 18, color: Colors.amber, fontWeight: FontWeight.bold)),
+                  children: [
+                    const Icon(Icons.dashboard_customize, color: Colors.amber, size: 20),
+                    const SizedBox(width: 8),
+                    Text(tr(currentLanguage, '请选择灵力法阵', 'Select a spread', 'Sila pilih susunan kad'), style: const TextStyle(fontSize: 18, color: Colors.amber, fontWeight: FontWeight.bold)),
                   ],
                 ),
                 const SizedBox(height: 15),
@@ -309,12 +406,12 @@ class _HomeScreenState extends State<HomeScreen> {
                           Row(
                             mainAxisAlignment: MainAxisAlignment.spaceBetween,
                             children: [
-                              Text(spread.name, style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: isSelected ? Colors.amber : Colors.white)),
+                              Text(spread.name(currentLanguage), style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: isSelected ? Colors.amber : Colors.white)),
                               if (isSelected) const Icon(Icons.check_circle, color: Colors.amber, size: 20)
                             ],
                           ),
                           const SizedBox(height: 8),
-                          Text(spread.description, style: TextStyle(fontSize: 13, height: 1.5, color: isSelected ? Colors.white : Colors.white54)),
+                          Text(spread.description(currentLanguage), style: TextStyle(fontSize: 13, height: 1.5, color: isSelected ? Colors.white : Colors.white54)),
                         ],
                       ),
                     ),
@@ -325,16 +422,16 @@ class _HomeScreenState extends State<HomeScreen> {
 
                 _buildActionButton(
                   icon: Icons.touch_app,
-                  label: '线上虚拟抽牌 (3D翻牌)',
+                  label: tr(currentLanguage, '线上虚拟抽牌 (3D翻牌)', 'Virtual draw (3D flip)', 'Cabutan Maya (Balikan 3D)'),
                   colors: [const Color(0xFF673AB7), const Color(0xFF311B92)],
-                  onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => VirtualDrawScreen(topic: selectedTopic, spread: selectedSpread))),
+                  onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => VirtualDrawScreen(topic: selectedTopic, spread: selectedSpread, lang: currentLanguage))),
                 ),
                 const SizedBox(height: 15),
                 _buildActionButton(
                   icon: Icons.view_module,
-                  label: '现实自主选牌 (手动录入)',
+                  label: tr(currentLanguage, '现实自主选牌 (手动录入)', 'Manual card entry', 'Pilihan Kad Manual'),
                   colors: [const Color(0xFF424242), const Color(0xFF212121)],
-                  onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => ManualDrawScreen(topic: selectedTopic, spread: selectedSpread))),
+                  onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => ManualDrawScreen(topic: selectedTopic, spread: selectedSpread, lang: currentLanguage))),
                 ),
                 const SizedBox(height: 40),
               ],
@@ -372,10 +469,9 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 }
 
-// ================= 全局核心：真实牌阵图形排版引擎 (Spread Visualizer) =================
-// 自动根据法阵类型，将牌摆放到真实的法阵坐标上
+// ================= 法阵可视化引擎 =================
 class SpreadVisualizer extends StatelessWidget {
-  final String spreadName;
+  final String spreadName; 
   final List<Widget> cards;
 
   const SpreadVisualizer({Key? key, required this.spreadName, required this.cards}) : super(key: key);
@@ -448,12 +544,13 @@ class SpreadVisualizer extends StatelessWidget {
   }
 }
 
-// ================= 2. 线上虚拟抽牌 (带图形化法阵) =================
+// ================= 2. 线上虚拟抽牌 =================
 class VirtualDrawScreen extends StatefulWidget {
-  final String topic;
+  final Topic topic;
   final SpreadConfig spread;
+  final AppLanguage lang;
 
-  const VirtualDrawScreen({Key? key, required this.topic, required this.spread}) : super(key: key);
+  const VirtualDrawScreen({Key? key, required this.topic, required this.spread, required this.lang}) : super(key: key);
 
   @override
   _VirtualDrawScreenState createState() => _VirtualDrawScreenState();
@@ -467,11 +564,11 @@ class _VirtualDrawScreenState extends State<VirtualDrawScreen> {
   void initState() {
     super.initState();
     final deck = List<TarotCard>.from(tarotDeck)..shuffle();
-    for (int i = 0; i < widget.spread.positions.length; i++) {
+    for (int i = 0; i < widget.spread.positions(widget.lang).length; i++) {
       drawnCards.add(DrawnCard(
         card: deck[i],
         isReversed: Random().nextBool(),
-        positionMeaning: widget.spread.positions[i],
+        positionMeaning: widget.spread.positions(widget.lang)[i],
       ));
     }
   }
@@ -485,7 +582,7 @@ class _VirtualDrawScreenState extends State<VirtualDrawScreen> {
   @override
   Widget build(BuildContext context) {
     List<Widget> cardWidgets = List.generate(drawnCards.length, (index) {
-      bool isCrossed = (widget.spread.name.contains('凯尔特') && index == 1);
+      bool isCrossed = (widget.spread.nameZh.contains('凯尔特') && index == 1);
       
       return SizedBox(
         width: 95, height: 215,
@@ -512,7 +609,7 @@ class _VirtualDrawScreenState extends State<VirtualDrawScreen> {
     });
 
     return Scaffold(
-      appBar: AppBar(title: Text('${widget.spread.name}', style: const TextStyle(fontSize: 18))),
+      appBar: AppBar(title: Text(widget.spread.name(widget.lang), style: const TextStyle(fontSize: 18))),
       body: Container(
         width: double.infinity,
         decoration: const BoxDecoration(
@@ -522,7 +619,14 @@ class _VirtualDrawScreenState extends State<VirtualDrawScreen> {
           children: [
             Padding(
               padding: const EdgeInsets.all(15.0),
-              child: Text('冥想关于【${widget.topic}】的问题，依次翻开下方阵法中的卡牌', style: const TextStyle(fontSize: 15, color: Colors.amberAccent)),
+              child: Text(
+                widget.lang == AppLanguage.en
+                    ? 'Focus on your question about 【${widget.topic.text(widget.lang)}】 and flip the cards in order.'
+                    : widget.lang == AppLanguage.ms 
+                    ? 'Tumpukan pada soalan anda tentang 【${widget.topic.text(widget.lang)}】 dan terbalikkan kad mengikut urutan.'
+                    : '冥想关于【${widget.topic.text(widget.lang)}】的问题，依次翻开下方阵法中的卡牌',
+                style: const TextStyle(fontSize: 15, color: Colors.amberAccent),
+              ),
             ),
             
             Expanded(
@@ -530,14 +634,14 @@ class _VirtualDrawScreenState extends State<VirtualDrawScreen> {
                 padding: const EdgeInsets.symmetric(horizontal: 10),
                 child: Center(
                   child: SpreadVisualizer(
-                    spreadName: widget.spread.name,
+                    spreadName: widget.spread.nameZh, 
                     cards: cardWidgets,
                   ),
                 ),
               ),
             ),
             
-            if (flippedCount == widget.spread.positions.length)
+            if (flippedCount == widget.spread.positions(widget.lang).length)
               Container(
                 width: double.infinity,
                 padding: const EdgeInsets.all(20),
@@ -550,9 +654,14 @@ class _VirtualDrawScreenState extends State<VirtualDrawScreen> {
                     elevation: 8,
                   ),
                   onPressed: () {
-                    Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => ReadingScreen(cards: drawnCards, topic: widget.topic, spreadName: widget.spread.name)));
+                    Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => ReadingScreen(cards: drawnCards, topic: widget.topic, spread: widget.spread, lang: widget.lang)));
                   },
-                  child: const Text('✨ 揭晓天机：查看详细牌意解析', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                  child: Text(
+                    widget.lang == AppLanguage.en ? '✨ Reveal the reading: view detailed interpretation' 
+                    : widget.lang == AppLanguage.ms ? '✨ Dedahkan bacaan: lihat tafsiran terperinci'
+                    : '✨ 揭晓天机：查看详细牌意解析',
+                    style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                  ),
                 ),
               )
           ],
@@ -654,12 +763,13 @@ class _TarotCardWidgetState extends State<TarotCardWidget> with SingleTickerProv
   }
 }
 
-// ================= 3. 现实手动录入模式 (史诗级强化：带法阵视图与防重复) =================
+// ================= 3. 手动录入模式 =================
 class ManualDrawScreen extends StatefulWidget {
-  final String topic;
+  final Topic topic;
   final SpreadConfig spread;
+  final AppLanguage lang;
 
-  const ManualDrawScreen({Key? key, required this.topic, required this.spread}) : super(key: key);
+  const ManualDrawScreen({Key? key, required this.topic, required this.spread, required this.lang}) : super(key: key);
 
   @override
   _ManualDrawScreenState createState() => _ManualDrawScreenState();
@@ -669,31 +779,42 @@ class _ManualDrawScreenState extends State<ManualDrawScreen> {
   List<DrawnCard> selectedCards = [];
 
   void _selectCard(TarotCard card) {
-    if (selectedCards.length >= widget.spread.positions.length) return;
+    if (selectedCards.length >= widget.spread.positions(widget.lang).length) return;
     
+    final int currentIndex = selectedCards.length;
+    final String currentPositionMeaning = widget.spread.positions(widget.lang)[currentIndex];
+
     showDialog(
       context: context,
       builder: (context) {
         return AlertDialog(
           backgroundColor: const Color(0xFF1E1E1E),
-          title: Text('【${card.name}】的状态是？', style: const TextStyle(color: Colors.amber)),
-          content: const Text('请回忆你在现实中抽到这张牌时的正逆位状态。', style: TextStyle(color: Colors.white70)),
+          title: Text(
+            '【${card.name(widget.lang)}】' + (widget.lang == AppLanguage.en ? ' State?' : widget.lang == AppLanguage.ms ? ' Keadaan?' : '的状态是？'), 
+            style: const TextStyle(color: Colors.amber)
+          ),
+          content: Text(
+            widget.lang == AppLanguage.en ? 'Recall the upright or reversed state of this card when you drew it.' 
+            : widget.lang == AppLanguage.ms ? 'Ingat kembali keadaan tegak atau terbalik kad ini semasa anda mencabutnya di dunia nyata.'
+            : '请回忆你在现实中抽到这张牌时的正逆位状态。', 
+            style: const TextStyle(color: Colors.white70)
+          ),
           actions: [
             TextButton(
               onPressed: () {
-                setState(() => selectedCards.add(DrawnCard(card: card, isReversed: false, positionMeaning: widget.spread.positions[selectedCards.length])));
+                setState(() => selectedCards.add(DrawnCard(card: card, isReversed: false, positionMeaning: currentPositionMeaning)));
                 Navigator.pop(context);
                 _checkFinish();
               },
-              child: const Text('正位 (Upright)', style: TextStyle(color: Colors.white, fontSize: 16)),
+              child: Text(widget.lang == AppLanguage.en ? 'Upright' : widget.lang == AppLanguage.ms ? 'Tegak' : '正位', style: const TextStyle(color: Colors.white, fontSize: 16)),
             ),
             TextButton(
               onPressed: () {
-                setState(() => selectedCards.add(DrawnCard(card: card, isReversed: true, positionMeaning: widget.spread.positions[selectedCards.length])));
+                setState(() => selectedCards.add(DrawnCard(card: card, isReversed: true, positionMeaning: currentPositionMeaning)));
                 Navigator.pop(context);
                 _checkFinish();
               },
-              child: const Text('逆位 (Reversed)', style: TextStyle(color: Colors.redAccent, fontSize: 16)),
+              child: Text(widget.lang == AppLanguage.en ? 'Reversed' : widget.lang == AppLanguage.ms ? 'Terbalik' : '逆位', style: const TextStyle(color: Colors.redAccent, fontSize: 16)),
             ),
           ],
         );
@@ -702,24 +823,21 @@ class _ManualDrawScreenState extends State<ManualDrawScreen> {
   }
 
   void _checkFinish() {
-    // 延迟 0.6 秒跳转，让用户能看一眼摆好的完整法阵
-    if (selectedCards.length == widget.spread.positions.length) {
+    if (selectedCards.length == widget.spread.positions(widget.lang).length) {
       Future.delayed(const Duration(milliseconds: 600), () {
-        Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => ReadingScreen(cards: selectedCards, topic: widget.topic, spreadName: widget.spread.name)));
+        Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => ReadingScreen(cards: selectedCards, topic: widget.topic, spread: widget.spread, lang: widget.lang)));
       });
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    int maxCards = widget.spread.positions.length;
+    int maxCards = widget.spread.positions(widget.lang).length;
     
-    // 生成顶部法阵的卡牌/空位占位符
     List<Widget> miniMapCards = List.generate(maxCards, (index) {
-      bool isCrossed = (widget.spread.name.contains('凯尔特') && index == 1);
+      bool isCrossed = (widget.spread.nameZh.contains('凯尔特') && index == 1);
       
       if (index < selectedCards.length) {
-        // 已经选好的牌
         final c = selectedCards[index];
         Widget img = Transform.rotate(
           angle: c.isReversed ? pi : 0,
@@ -745,7 +863,6 @@ class _ManualDrawScreenState extends State<ManualDrawScreen> {
           ),
         );
       } else {
-        // 还没选的空位（当前需要选的槽位会高亮）
         bool isCurrent = index == selectedCards.length;
         Widget placeholder = Container(
           decoration: BoxDecoration(
@@ -765,7 +882,7 @@ class _ManualDrawScreenState extends State<ManualDrawScreen> {
             children: [
               Container(
                 height: 35, alignment: Alignment.center,
-                child: Text(widget.spread.positions[index], style: TextStyle(color: isCurrent ? Colors.amber : Colors.white54, fontSize: 12, fontWeight: FontWeight.bold), textAlign: TextAlign.center, maxLines: 2),
+                child: Text(widget.spread.positions(widget.lang)[index], style: TextStyle(color: isCurrent ? Colors.amber : Colors.white54, fontSize: 12, fontWeight: FontWeight.bold), textAlign: TextAlign.center, maxLines: 2),
               ),
               Expanded(child: placeholder),
             ],
@@ -775,37 +892,46 @@ class _ManualDrawScreenState extends State<ManualDrawScreen> {
     });
 
     return Scaffold(
-      appBar: AppBar(title: Text('现实选牌录入 (${selectedCards.length}/$maxCards)')),
+      appBar: AppBar(
+        title: Text(
+          widget.lang == AppLanguage.en ? 'Manual card entry (${selectedCards.length}/$maxCards)' 
+          : widget.lang == AppLanguage.ms ? 'Pilihan kad manual (${selectedCards.length}/$maxCards)'
+          : '现实选牌录入 (${selectedCards.length}/$maxCards)'
+        )
+      ),
       body: Container(
         decoration: const BoxDecoration(
           gradient: LinearGradient(begin: Alignment.topCenter, end: Alignment.bottomCenter, colors: [Color(0xFF1E112A), Color(0xFF0F0C1B)]),
         ),
         child: Column(
           children: [
-            // 🌟 核心升级：上半部分显示实时阵法组装过程！
             Container(
-              height: widget.spread.name.contains('凯尔特') ? 380 : 250,
+              height: widget.spread.nameZh.contains('凯尔特') ? 380 : 250,
               width: double.infinity,
               padding: const EdgeInsets.symmetric(vertical: 10),
               decoration: const BoxDecoration(
                 color: Colors.black26,
                 border: Border(bottom: BorderSide(color: Colors.white10)),
               ),
-              child: SpreadVisualizer(spreadName: widget.spread.name, cards: miniMapCards),
+              child: SpreadVisualizer(spreadName: widget.spread.nameZh, cards: miniMapCards), 
             ),
             
-            // 提示文字
             Padding(
               padding: const EdgeInsets.all(12.0),
               child: Text(
-                selectedCards.length < maxCards 
-                  ? '👉 请在下方选择【${widget.spread.positions[selectedCards.length]}】的牌'
-                  : '✨ 牌阵已就绪，正在开启解读...',
+                selectedCards.length < maxCards
+                  ? (widget.lang == AppLanguage.en
+                      ? '👉 Select the card for 【${widget.spread.positions(widget.lang)[selectedCards.length]}】 below.'
+                      : widget.lang == AppLanguage.ms
+                      ? '👉 Pilih kad untuk 【${widget.spread.positions(widget.lang)[selectedCards.length]}】 di bawah.'
+                      : '👉 请在下方选择【${widget.spread.positions(widget.lang)[selectedCards.length]}】的牌')
+                  : (widget.lang == AppLanguage.en ? '✨ The spread is ready, beginning the reading...' 
+                     : widget.lang == AppLanguage.ms ? '✨ Susunan sudah sedia, memulakan bacaan...'
+                     : '✨ 牌阵已就绪，正在开启解读...'),
                 style: const TextStyle(color: Colors.amberAccent, fontSize: 16, fontWeight: FontWeight.bold),
               ),
             ),
             
-            // 下半部分：牌库网格
             Expanded(
               child: GridView.builder(
                 padding: const EdgeInsets.all(12),
@@ -814,8 +940,7 @@ class _ManualDrawScreenState extends State<ManualDrawScreen> {
                 itemCount: tarotDeck.length,
                 itemBuilder: (context, index) {
                   final card = tarotDeck[index];
-                  // 🌟 核心升级：防重复！如果已经选过这张牌了，就置灰不能再点
-                  bool isPicked = selectedCards.any((c) => c.card.name == card.name);
+                  bool isPicked = selectedCards.any((c) => c.card.nameZh == card.nameZh);
                   
                   return GestureDetector(
                     onTap: isPicked ? null : () => _selectCard(card),
@@ -827,7 +952,7 @@ class _ManualDrawScreenState extends State<ManualDrawScreen> {
                           footer: Container(
                             color: Colors.black87,
                             padding: const EdgeInsets.symmetric(vertical: 4),
-                            child: Text(card.name, textAlign: TextAlign.center, style: const TextStyle(fontSize: 10, color: Colors.white)),
+                            child: Text(card.name(widget.lang), textAlign: TextAlign.center, style: const TextStyle(fontSize: 10, color: Colors.white)),
                           ),
                           child: Stack(
                             fit: StackFit.expand,
@@ -856,13 +981,14 @@ class _ManualDrawScreenState extends State<ManualDrawScreen> {
   }
 }
 
-// ================= 4. 解牌结果页面 (顶部展示微缩法阵图) =================
+// ================= 4. 解牌结果页面 =================
 class ReadingScreen extends StatefulWidget {
   final List<DrawnCard> cards;
-  final String topic;
-  final String spreadName;
+  final Topic topic;
+  final SpreadConfig spread; 
+  final AppLanguage lang;
 
-  const ReadingScreen({Key? key, required this.cards, required this.topic, required this.spreadName}) : super(key: key);
+  const ReadingScreen({Key? key, required this.cards, required this.topic, required this.spread, required this.lang}) : super(key: key);
 
   @override
   _ReadingScreenState createState() => _ReadingScreenState();
@@ -880,148 +1006,116 @@ class _ReadingScreenState extends State<ReadingScreen> {
     setState(() {
       showAI = true;
       isGenerating = true;
-      aiResponse = "🔮 灵界连结中，占卜师正在为你综合解读...\n\n";
+      aiResponse = widget.lang == AppLanguage.en
+        ? "🔮 Connecting to the oracle, your tarot master is preparing the reading...\n\n"
+        : widget.lang == AppLanguage.ms 
+        ? "🔮 Menyambung ke alam ramalan, pakar tarot anda sedang menyediakan bacaan...\n\n"
+        : "🔮 灵界连结中，占卜师正在为你综合解读...\n\n";
     });
-
-    String prompt = "你是一位极度神秘、深谙心理学且充满同理心的资深塔罗牌大师。\n"
-        "用户向你求问关于【${widget.topic}】的发展，使用的是【${widget.spreadName}】。\n\n"
+    
+    String prompt = "";
+    if (widget.lang == AppLanguage.en) {
+      prompt = "You are a deeply intuitive, psychologically astute, and compassionate tarot master. IMPORTANT: YOU MUST ANSWER ENTIRELY IN ENGLISH.\n" +
+        "The user asked about 【${widget.topic.text(widget.lang)}】 using the 【${widget.spread.name(widget.lang)}】.\n\n" +
+        "Card draw details are as follows:\n";
+    } else if (widget.lang == AppLanguage.ms) {
+      prompt = "Anda adalah seorang pakar tarot yang sangat intuitif, peka secara psikologi, dan penuh belas kasihan. PENTING: ANDA MESTI MENJAWAB SEPENUHNYA DALAM BAHASA MELAYU (MALAY).\n" +
+        "Pengguna bertanya tentang 【${widget.topic.text(widget.lang)}】 menggunakan 【${widget.spread.name(widget.lang)}】.\n\n" +
+        "Butiran cabutan kad adalah seperti berikut:\n";
+    } else {
+      prompt = "你是一位极度神秘、深谙心理学且充满同理心的资深塔罗牌大师。请务必使用中文进行解答。\n" +
+        "用户向你求问关于【${widget.topic.text(widget.lang)}】的发展，使用的是【${widget.spread.name(widget.lang)}】。\n\n" +
         "抽牌情况如下：\n";
-
-    for (var c in widget.cards) {
-      String status = c.isReversed ? '逆位' : '正位';
-      prompt += "- 在【${c.positionMeaning}】位置，抽到【${c.card.name}（$status）】\n";
     }
 
-    prompt += "\n请按照以下结构解答：\n"
-        "1. 🌟 能量感知：点破当前【${widget.topic}】的整体磁场。\n"
-        "2. 🃏 牌阵深度拆解：根据法阵的位置和牌面，深入分析它们相互的影响。\n"
-        "3. 💡 宇宙指引：给出具体的行动建议和治愈的寄语。\n"
+    for (var c in widget.cards) {
+      String status = c.isReversed 
+          ? (widget.lang == AppLanguage.en ? 'Reversed' : widget.lang == AppLanguage.ms ? 'Terbalik' : '逆位') 
+          : (widget.lang == AppLanguage.en ? 'Upright' : widget.lang == AppLanguage.ms ? 'Tegak' : '正位');
+          
+      if (widget.lang == AppLanguage.en) {
+         prompt += "- At position [${c.positionMeaning}], the card drawn is [${c.card.name(widget.lang)}] (${status})\n";
+      } else if (widget.lang == AppLanguage.ms) {
+         prompt += "- Di posisi [${c.positionMeaning}], kad yang dicabut adalah [${c.card.name(widget.lang)}] (${status})\n";
+      } else {
+         prompt += "- 在【${c.positionMeaning}】位置，抽到【${c.card.name(widget.lang)}（$status）】\n";
+      }
+    }
+
+    if (widget.lang == AppLanguage.en) {
+      prompt += "\nPlease answer using the following structure IN ENGLISH ONLY:\n" +
+        "1. 🌟 Energy sensing: reveal the overall field around ${widget.topic.text(widget.lang)}.\n" +
+        "2. 🃏 Spread analysis: dive into how each position and card interacts.\n" +
+        "3. 💡 Cosmic guidance: offer concrete action advice and healing words.\n" +
+        "Write with graceful clarity and empathetic insight. Ensure the entire response is in English.";
+    } else if (widget.lang == AppLanguage.ms) {
+      prompt += "\nSila jawab menggunakan struktur berikut DALAM BAHASA MELAYU SAHAJA:\n" +
+        "1. 🌟 Pengesanan tenaga: dedahkan medan keseluruhan di sekitar ${widget.topic.text(widget.lang)}.\n" +
+        "2. 🃏 Analisis susunan: kaji bagaimana setiap kedudukan dan kad berinteraksi.\n" +
+        "3. 💡 Panduan kosmik: berikan nasihat tindakan yang konkrit dan kata-kata penyembuhan.\n" +
+        "Tulis dengan kejelasan yang anggun dan pandangan yang empati. Pastikan keseluruhan jawapan adalah dalam Bahasa Melayu.";
+    } else {
+      prompt += "\n请按照以下结构解答：\n" +
+        "1. 🌟 能量感知：点破当前【${widget.topic.text(widget.lang)}】的整体磁场。\n" +
+        "2. 🃏 牌阵深度拆解：根据法阵的位置和牌面，深入分析它们相互的影响。\n" +
+        "3. 💡 宇宙指引：给出具体的行动建议和治愈的寄语。\n" +
         "请使用优雅清晰的排版，语气洞悉人心。";
+    }
 
     try {
       final response = await http.post(
         Uri.parse(_proxyUrl),
         headers: {
           'Content-Type': 'application/json',
-          'x-app-version': '2.1.0', // 👈 已经帮你改成了 2.0.1！
+          'x-app-version': '2.1.0', 
         },
         body: jsonEncode({"prompt": prompt}),
       );
+      
+      if (!mounted) return;
 
       if (response.statusCode == 200) {
         final data = jsonDecode(utf8.decode(response.bodyBytes));
         setState(() {
-          aiResponse = data['text'] ?? '占卜师暂时无法解读，请稍后再试。';
-        });
-      } else if (response.statusCode == 403) {
-        final data = jsonDecode(utf8.decode(response.bodyBytes));
-        setState(() {
-          aiResponse = "⚠️ ${data['error'] ?? '请更新 App 才能继续使用'}";
-        });
-
-        // 👇 加上防卡死机制：最多等 Firebase 3秒钟！
-        try {
-          String downloadUrl = "";
-          final remoteConfig = FirebaseRemoteConfig.instance;
-          
-          // 给 Firebase 加 3 秒限时，超过 3 秒没反应直接抛出异常，走 catch 路线！
-          await remoteConfig.fetchAndActivate().timeout(const Duration(seconds: 3)); 
-          downloadUrl = remoteConfig.getString('apk_download_url');
-          
-          if (downloadUrl.isEmpty) {
-            downloadUrl = "https://github.com/wenhong1214/tarocard/releases/latest/download/app-release.apk"; 
-          }
-          if (mounted) _showForceUpdateDialog(downloadUrl);
-          
-        } catch (e) {
-          debugPrint("🚨 Firebase 请求卡死或超时，启用保底弹窗: $e");
-          // 哪怕 Firebase 彻底坏了，3秒后也一定会强制弹窗！
-          if (mounted) {
-            _showForceUpdateDialog("https://github.com/wenhong1214/tarocard/releases/latest/download/app-release.apk");
-          }
-        }
-      }
-        
-       else if (response.statusCode == 429) {
-        final data = jsonDecode(utf8.decode(response.bodyBytes));
-        setState(() {
-          aiResponse = "⚠️ ${data['error'] ?? '访问过于频繁，请稍后再试。'}";
+          aiResponse = data['text'] ?? (
+            widget.lang == AppLanguage.en ? 'The reader is unable to interpret right now, please try again later.' 
+            : widget.lang == AppLanguage.ms ? 'Pakar tarot tidak dapat mentafsir sekarang, sila cuba lagi nanti.'
+            : '占卜师暂时无法解读，请稍后再试。'
+          );
         });
       } else {
         setState(() {
-          aiResponse = "⚠️ API 连接失败 (${response.statusCode})\n\n${response.body}";
+          aiResponse = widget.lang == AppLanguage.en
+              ? "⚠️ API Connection failed (${response.statusCode})\n\n${response.body}"
+              : widget.lang == AppLanguage.ms
+              ? "⚠️ Sambungan API gagal (${response.statusCode})\n\n${response.body}"
+              : "⚠️ API 连接失败 (${response.statusCode})\n\n${response.body}";
         });
       }
 
     } catch (e) {
-      setState(() {
-        aiResponse = "⚠️ 占卜师暂时失去了连接，请检查网络。($e)";
-      });
+        if (!mounted) return; 
+        setState(() {
+          aiResponse = widget.lang == AppLanguage.en
+              ? "⚠️ The reader lost connection. Please check your network. ($e)"
+              : widget.lang == AppLanguage.ms
+              ? "⚠️ Pakar tarot terputus sambungan. Sila semak rangkaian anda. ($e)"
+              : "⚠️ 占卜师暂时失去了连接，请检查网络。($e)";
+        });
     } finally {
-      setState(() {
-        isGenerating = false;
-        isFinished = true;
-      });
+      if (mounted) { 
+        setState(() {
+          isGenerating = false;
+          isFinished = true;
+        });
+      }
     }
   }
 
-  // 👇 专门在解牌页弹出的强制更新框
-  void _showForceUpdateDialog(String url) {
-    showDialog(
-      context: context,
-      barrierDismissible: false, // 禁止点击弹窗外部关闭
-      builder: (context) {
-        return PopScope(
-          canPop: false, // 禁用物理返回键
-          child: AlertDialog(
-            backgroundColor: const Color(0xFF1E112A),
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(16),
-              side: const BorderSide(color: Colors.amber, width: 1.5),
-            ),
-            title: const Row(
-              children: [
-                Icon(Icons.system_update_alt, color: Colors.amber),
-                SizedBox(width: 10),
-                Text('灵境已升级', style: TextStyle(color: Colors.amber, fontWeight: FontWeight.bold)),
-              ],
-            ),
-            content: const Text(
-              '当前版本已无法连接星轨，请点击下方按钮前往下载最新版本，探索全新天机。',
-              style: TextStyle(color: Colors.white70, fontSize: 16, height: 1.5),
-            ),
-            actionsAlignment: MainAxisAlignment.center,
-            actions: [
-              ElevatedButton(
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: Colors.amber,
-                  foregroundColor: Colors.black,
-                  padding: const EdgeInsets.symmetric(horizontal: 30, vertical: 14),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(30)),
-                ),
-                onPressed: () async {
-                  try {
-                    final uri = Uri.parse(url);
-                    // 直接强制调用外部浏览器，无需提前询问系统
-                    await launchUrl(uri, mode: LaunchMode.externalApplication);
-                  } catch (e) {
-                    debugPrint("跳转浏览器失败，可能是链接不合法或设备没有浏览器: $e");
-                  }
-                },
-                child: const Text('✨ 前往下载更新', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
-              ),
-            ],
-          ),
-        );
-      },
-    );
-  }
-
-  // ... 下方的 build 方法（界面渲染部分）保持你原本的代码不变即可
   @override
   Widget build(BuildContext context) {
     List<Widget> miniMapCards = List.generate(widget.cards.length, (index) {
-      bool isCrossed = (widget.spreadName.contains('凯尔特') && index == 1);
+      bool isCrossed = (widget.spread.nameZh.contains('凯尔特') && index == 1);
       final c = widget.cards[index];
       
       Widget img = Transform.rotate(
@@ -1050,7 +1144,14 @@ class _ReadingScreenState extends State<ReadingScreen> {
     });
 
     return Scaffold(
-      appBar: AppBar(title: Text('【${widget.topic}】指引报告', style: const TextStyle(color: Colors.amber))),
+      appBar: AppBar(
+        title: Text(
+          widget.lang == AppLanguage.en ? '【${widget.topic.text(widget.lang)}】 Guidance Report' 
+          : widget.lang == AppLanguage.ms ? 'Laporan Panduan 【${widget.topic.text(widget.lang)}】'
+          : '【${widget.topic.text(widget.lang)}】指引报告', 
+          style: const TextStyle(color: Colors.amber)
+        )
+      ),
       body: Container(
         decoration: const BoxDecoration(
           gradient: LinearGradient(begin: Alignment.topCenter, end: Alignment.bottomCenter, colors: [Color(0xFF1E112A), Color(0xFF0F0C1B)]),
@@ -1059,7 +1160,7 @@ class _ReadingScreenState extends State<ReadingScreen> {
           padding: const EdgeInsets.all(16),
           children: [
             Container(
-              height: widget.spreadName.contains('凯尔特') ? 380 : 250,
+              height: widget.spread.nameZh.contains('凯尔特') ? 380 : 250,
               padding: const EdgeInsets.symmetric(vertical: 10),
               margin: const EdgeInsets.only(bottom: 20),
               decoration: BoxDecoration(
@@ -1067,12 +1168,15 @@ class _ReadingScreenState extends State<ReadingScreen> {
                 borderRadius: BorderRadius.circular(16),
                 border: Border.all(color: Colors.white10),
               ),
-              child: SpreadVisualizer(spreadName: widget.spreadName, cards: miniMapCards),
+              child: SpreadVisualizer(spreadName: widget.spread.nameZh, cards: miniMapCards), 
             ),
 
             ...widget.cards.map((c) {
-              final status = c.isReversed ? "逆位" : "正位";
-              final meaning = c.isReversed ? c.card.reversedMeaning : c.card.uprightMeaning;
+              final status = c.isReversed 
+                  ? (widget.lang == AppLanguage.en ? "Reversed" : widget.lang == AppLanguage.ms ? "Terbalik" : "逆位") 
+                  : (widget.lang == AppLanguage.en ? "Upright" : widget.lang == AppLanguage.ms ? "Tegak" : "正位");
+              
+              final meaning = c.isReversed ? c.card.reversedMeaning(widget.lang) : c.card.uprightMeaning(widget.lang);
 
               return Container(
                 margin: const EdgeInsets.only(bottom: 20),
@@ -1104,7 +1208,7 @@ class _ReadingScreenState extends State<ReadingScreen> {
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             Text(
-                              '【${c.positionMeaning}】\n${c.card.name}',
+                              '【${c.positionMeaning}】\n${c.card.name(widget.lang)}',
                               style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.amber, height: 1.3),
                             ),
                             const SizedBox(height: 5),
@@ -1164,7 +1268,9 @@ class _ReadingScreenState extends State<ReadingScreen> {
                   ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(color: Colors.black, strokeWidth: 2))
                   : const Icon(Icons.auto_awesome, color: Colors.black),
               label: Text(
-                isGenerating ? '大师观星解读中...' : '✨ 开启 AI 深度解牌',
+                isGenerating 
+                ? (widget.lang == AppLanguage.en ? 'Master is interpreting...' : widget.lang == AppLanguage.ms ? 'Pakar sedang mentafsir...' : '大师观星解读中...')
+                : (widget.lang == AppLanguage.en ? '✨ Start AI Deep Reading' : widget.lang == AppLanguage.ms ? '✨ Mulakan Bacaan AI Mendalam' : '✨ 开启 AI 深度解牌'),
                 style: const TextStyle(color: Colors.black, fontWeight: FontWeight.bold, fontSize: 16),
               ),
               onPressed: isGenerating ? null : _askAI,
@@ -1174,188 +1280,660 @@ class _ReadingScreenState extends State<ReadingScreen> {
   }
 }
 
-// ⬇️ 下方的原始牌意数据保留不变
+// ⬇️ 完整78张塔罗牌数据（多语言）
 const List<Map<String, dynamic>> rawTarotData = [
-  {"name": "愚者 (The Fool)", "number": "0", "arcana": "大阿尔卡纳", "suit": null, "img": "m00.jpg",
-   "upright": "全新的开始、充满未知的冒险、绝对的自由与天真。放空心思，勇敢踏上未知的旅程，相信宇宙的安排。", 
-   "reversed": "鲁莽、不切实际、错失良机。你的行为可能过于冲动，缺乏深思熟虑，小心过度冒险带来的危机。"},
-  {"name": "魔术师 (The Magician)", "number": "1", "arcana": "大阿尔卡纳", "suit": null, "img": "m01.jpg",
-   "upright": "创造力、行动力、化无为有。你已经拥有了实现目标所需的所有资源，现在是专注并付诸行动的最好时机。", 
-   "reversed": "才华未展、缺乏计划、甚至可能遭遇欺骗。你可能在浪费自己的天赋，或者被某些花言巧语所蒙蔽。"},
-  {"name": "女祭司 (The High Priestess)", "number": "2", "arcana": "大阿尔卡纳", "suit": null, "img": "m02.jpg",
-   "upright": "直觉、潜意识、神秘的内在智慧。顺从你的直觉，现在不是向外行动的时候，而是向内探索、等待时机。", 
-   "reversed": "直觉受阻、情绪化、忽略了内心的声音。你可能过于依赖表面的逻辑，而忽略了隐藏在水面下的真相。"},
-  {"name": "皇后 (The Empress)", "number": "3", "arcana": "大阿尔卡纳", "suit": null, "img": "m03.jpg",
-   "upright": "丰收、母性、培育、创造力。享受生活的美好，感受爱与被爱，你的计划正在孕育并即将开花结果。", 
-   "reversed": "过度依赖、溺爱、创造力受阻。你可能在感情或物质上过于索取，或者沉溺于享乐而停滞不前。"},
-  {"name": "皇帝 (The Emperor)", "number": "4", "arcana": "大阿尔卡纳", "suit": null, "img": "m04.jpg",
-   "upright": "权力、规则、控制、稳定的基础。你需要建立纪律和秩序，用理性和坚定的意志去掌控全局。", 
-   "reversed": "独裁、僵化、失去控制。你可能过于固执己见，或者缺乏自律导致原本的计划崩塌。"},
-  {"name": "教皇 (The Hierophant)", "number": "5", "arcana": "大阿尔卡纳", "suit": null, "img": "m05.jpg",
-   "upright": "传统、信仰、教育、精神指引。遵从传统规则会有所帮助，或者寻找一位经验丰富的导师为你指点迷津。", 
-   "reversed": "打破常规、盲从、挑战权威。你不再受制于传统的束缚，渴望开创属于自己的全新信仰或道路。"},
-  {"name": "恋人 (The Lovers)", "number": "6", "arcana": "大阿尔卡纳", "suit": null, "img": "m06.jpg",
-   "upright": "爱情、和谐、价值观的契合。面临一个重要的选择，请遵从你的真心，一段充满吸引力的关系正在展开。", 
-   "reversed": "关系破裂、错误的选择、价值观冲突。感情中可能出现不和，或者你在面临选择时逃避了责任。"},
-  {"name": "战车 (The Chariot)", "number": "7", "arcana": "大阿尔卡纳", "suit": null, "img": "m07.jpg",
-   "upright": "意志力、胜利、克服困难。通过坚定的决心和强大的自律，你将克服一切阻力，成功掌控眼前的局面。", 
-   "reversed": "失去方向、受阻、缺乏自律。你可能感到失控，或者因为内部的冲突而无法向前推进。"},
-  {"name": "力量 (Strength)", "number": "8", "arcana": "大阿尔卡纳", "suit": null, "img": "m08.jpg",
-   "upright": "内在力量、勇气、耐心。用温柔和同理心去化解冲突，真正的力量来源于内心的平静与坚韧。", 
-   "reversed": "自我怀疑、软弱、情绪失控。你可能对自己的能力感到不自信，或者被内心的恐惧和愤怒所支配。"},
-  {"name": "隐士 (The Hermit)", "number": "9", "arcana": "大阿尔卡纳", "suit": null, "img": "m09.jpg",
-   "upright": "内省、寻找内在智慧、退避深思。暂时远离喧嚣，独处能帮你找到一直苦苦追寻的答案。", 
-   "reversed": "孤立、迷失、拒绝外界帮助。过度封闭自我可能让你陷入孤独，是时候重新回到人群中了。"},
-  {"name": "命运之轮 (Wheel of Fortune)", "number": "10", "arcana": "大阿尔卡纳", "suit": null, "img": "m10.jpg",
-   "upright": "转机、命运的安排、不可避免的变化。运势即将好转，顺应生命周期的起伏，抓住突如其来的好运。", 
-   "reversed": "抗拒改变、失去控制、暂时的厄运。事情的发展偏离了预期，不要逆势而为，耐心等待低谷过去。"},
-  {"name": "正义 (Justice)", "number": "11", "arcana": "大阿尔卡纳", "suit": null, "img": "m11.jpg",
-   "upright": "公平、诚实、因果报应。理性的决定将带来公正的结果，你过去的所作所为正在产生相应的回报。", 
-   "reversed": "不公、偏见、逃避责任。可能面临不公平的待遇，或者你在某件事上缺乏诚实和客观的判断。"},
-  {"name": "倒吊人 (The Hanged Man)", "number": "12", "arcana": "大阿尔卡纳", "suit": null, "img": "m12.jpg",
-   "upright": "换位思考、等待、自愿的牺牲。当前的停滞是为了更深层的顿悟，换个角度看问题，放下无谓的执念。", 
-   "reversed": "无谓的牺牲、停滞不前、错失机会。你可能在不值得的事情上浪费精力，且抗拒做出必要的改变。"},
-  {"name": "死神 (Death)", "number": "13", "arcana": "大阿尔卡纳", "suit": null, "img": "m13.jpg",
-   "upright": "结束与新生、不可逆转的转变。一个旧的阶段彻底结束，勇敢地放手，为全新的开始腾出空间。", 
-   "reversed": "恐惧改变、死板、拒绝接受现实。你正紧紧抓住过去不放，这种对改变的抗拒只会延长你的痛苦。"},
-  {"name": "节制 (Temperance)", "number": "14", "arcana": "大阿尔卡纳", "suit": null, "img": "m14.jpg",
-   "upright": "平衡、中庸、和谐与耐心。将不同的元素完美结合，保持情绪的稳定，稳步走向治愈和提升。", 
-   "reversed": "失衡、极端、缺乏耐心。生活可能陷入了某种混乱，你在处理问题时可能采取了过于极端的手段。"},
-  {"name": "恶魔 (The Devil)", "number": "15", "arcana": "大阿尔卡纳", "suit": null, "img": "m15.jpg",
-   "upright": "诱惑、束缚、沉迷于物质。你感到被某种坏习惯、有毒的关系或物质欲望所困，其实锁链在你手中。", 
-   "reversed": "挣脱束缚、克服诱惑、重获自由。你终于意识到了问题的所在，开始摆脱阴暗面，找回自控力。"},
-  {"name": "高塔 (The Tower)", "number": "16", "arcana": "大阿尔卡纳", "suit": null, "img": "m16.jpg",
-   "upright": "突变、意外的灾难、打破虚假的幻象。建立在不稳固基础上的事物将崩塌，虽然痛苦，但能带来彻底的解脱。", 
-   "reversed": "害怕改变、死撑、拖延结局。灾难可能被勉强避免，或者你正竭力维持一个注定要破裂的假象。"},
-  {"name": "星星 (The Star)", "number": "17", "arcana": "大阿尔卡纳", "suit": null, "img": "m17.jpg",
-   "upright": "希望、宁静、治愈。在经历了风暴之后，灵感与希望重新降临，宇宙正在祝福你，请保持乐观。", 
-   "reversed": "绝望、缺乏信心、失去灵感。你可能感到沮丧，对未来失去了希望，需要重新找回内心的光芒。"},
-  {"name": "月亮 (The Moon)", "number": "18", "arcana": "大阿尔卡纳", "suit": null, "img": "m18.jpg",
-   "upright": "幻觉、恐惧、潜意识的波动。事情并没有表面看起来那么简单，注意隐藏的危险，面对内心的焦虑。", 
-   "reversed": "揭露真相、摆脱困惑。迷雾正在散去，你逐渐看清了事情的真相，成功克服了潜意识的恐惧。"},
-  {"name": "太阳 (The Sun)", "number": "19", "arcana": "大阿尔卡纳", "suit": null, "img": "m19.jpg",
-   "upright": "成功、快乐、充满活力。一切都在朝着最好的方向发展，真相大白，你的努力将获得极大的满足与成就。", 
-   "reversed": "暂时的阴霾、成功延迟。虽然依旧是正向的，但快乐可能打了个折扣，或者你需要付出更多努力才能见彩虹。"},
-  {"name": "审判 (Judgement)", "number": "20", "arcana": "大阿尔卡纳", "suit": null, "img": "m20.jpg",
-   "upright": "觉醒、重生、内心的呼唤。到了总结过去、宽恕自己和他人、并作出影响深远决定的时候了。", 
-   "reversed": "自我怀疑、无法释怀、拒绝面对。你可能因为过去的内疚或恐惧，而不敢迎接生命的新阶段。"},
-  {"name": "世界 (The World)", "number": "21", "arcana": "大阿尔卡纳", "suit": null, "img": "m21.jpg",
-   "upright": "完成、圆满、成功的终点。一个重要的生命周期完美结束，你拥有了一切，即将迈入更高的层次。", 
-   "reversed": "未完成、停滞、准备不足。距离成功只有一步之遥，但可能因为某些未解决的问题而暂时受阻。"},
+  {"number": "0", "arcana": "大阿尔卡纳", "suit": null, "img": "m00.jpg",
+   "nameZh": "愚者", "nameEn": "The Fool", "nameMs": "Sang Pengembara",
+   "uprightZh": "全新的开始、未知冒险。放空心思，勇敢踏上旅程，相信宇宙。",
+   "uprightEn": "New beginnings, unknown adventures. Clear your mind, step forward, trust the universe.",
+   "uprightMs": "Permulaan baharu, pengembaraan tanpa arah. Kosongkan fikiran, berani melangkah, percayalah pada alam semesta.",
+   "reversedZh": "鲁莽、不切实际、错失良机。你的行为可能过于冲动，小心过度冒险带来的危机。",
+   "reversedEn": "Reckless, impractical, missed opportunities. Beware of risks from excessive impulsiveness.",
+   "reversedMs": "Gopoh, tidak realistik. Berhati-hati dengan krisis akibat tindakan terburu-buru."},
+   
+  {"number": "1", "arcana": "大阿尔卡纳", "suit": null, "img": "m01.jpg",
+   "nameZh": "魔术师", "nameEn": "The Magician", "nameMs": "Ahli Sihir",
+   "uprightZh": "创造力、行动力、化无为有。你拥有所需的所有资源，是付诸行动的最佳时机。",
+   "uprightEn": "Creativity, action, manifestation. You have all resources; it's time to take action.",
+   "uprightMs": "Kreativiti, tindakan, manifestasi. Anda mempunyai sumber yang cukup, tiba masanya bertindak.",
+   "reversedZh": "才华未展、缺乏计划。你可能在浪费天赋，或被花言巧语蒙蔽。",
+   "reversedEn": "Unused talent, poor planning. You may be wasting potential or being deceived.",
+   "reversedMs": "Bakat terpendam, tiada rancangan. Anda mungkin mensia-siakan bakat atau ditipu."},
+   
+  {"number": "2", "arcana": "大阿尔卡纳", "suit": null, "img": "m02.jpg",
+   "nameZh": "女祭司", "nameEn": "The High Priestess", "nameMs": "Pendeta Wanita",
+   "uprightZh": "直觉、潜意识。顺从直觉，现在不宜向外行动，而应向内探索。",
+   "uprightEn": "Intuition, subconscious. Trust your inner voice; reflect inward rather than acting outwardly.",
+   "uprightMs": "Gerak hati, bawah sedar. Percaya kata hati; renung ke dalam diri bukan bertindak ke luar.",
+   "reversedZh": "直觉受阻、情绪化。过度依赖表面逻辑而忽略了隐藏的真相。",
+   "reversedEn": "Blocked intuition, emotional. Relying too much on surface logic, ignoring hidden truths.",
+   "reversedMs": "Gerak hati tersekat, beremosi. Terlalu bergantung pada logik, mengabaikan kebenaran tersembunyi."},
 
-  {"name": "圣杯王牌 (Ace of Cups)", "number": "1", "arcana": "小阿尔卡纳", "suit": "圣杯", "img": "c01.jpg",
-   "upright": "感情的崭新开始、爱意涌动、新恋情或新友谊的诞生。", "reversed": "情感枯竭、直觉受阻、感情可能遭遇单相思或冷漠。"},
-  {"name": "圣杯二 (Two of Cups)", "number": "2", "arcana": "小阿尔卡纳", "suit": "圣杯", "img": "c02.jpg",
-   "upright": "完美的伴侣关系、互相吸引、和谐的合作与誓言。", "reversed": "关系破裂、沟通不畅、彼此之间产生不信任或分离。"},
-  {"name": "圣杯三 (Three of Cups)", "number": "3", "arcana": "小阿尔卡纳", "suit": "圣杯", "img": "c03.jpg",
-   "upright": "庆祝、欢乐的聚会、闺蜜/兄弟般的友谊与分享。", "reversed": "乐极生悲、过度放纵、或者关系中出现了第三方的干扰。"},
-  {"name": "圣杯四 (Four of Cups)", "number": "4", "arcana": "小阿尔卡纳", "suit": "圣杯", "img": "c04.jpg",
-   "upright": "厌倦、冷漠、对现状不满而错失了外界递来的新机遇。", "reversed": "重新振作、走出低谷、开始愿意接受新的事物和机会。"},
-  {"name": "圣杯五 (Five of Cups)", "number": "5", "arcana": "小阿尔卡纳", "suit": "圣杯", "img": "c05.jpg",
-   "upright": "悲伤、失落、过度沉溺于已经失去的事物，忽略了剩下的美好。", "reversed": "逐渐走出阴霾、释怀过去的伤痛、重新找回内心的平静。"},
-  {"name": "圣杯六 (Six of Cups)", "number": "6", "arcana": "小阿尔卡纳", "suit": "圣杯", "img": "c06.jpg",
-   "upright": "童年的回忆、纯真的感情、故人重逢或收到礼物。", "reversed": "过度沉溺过去、拒绝成长、需要面对当前的现实问题。"},
-  {"name": "圣杯七 (Seven of Cups)", "number": "7", "arcana": "小阿尔卡纳", "suit": "圣杯", "img": "c07.jpg",
-   "upright": "充满幻象与选择、白日梦、需要看清什么才是真实的。", "reversed": "认清现实、做出明确的决定、不再被虚假的诱惑所迷惑。"},
-  {"name": "圣杯八 (Eight of Cups)", "number": "8", "arcana": "小阿尔卡纳", "suit": "圣杯", "img": "c08.jpg",
-   "upright": "放弃现有的安逸、转身离开、去追寻更高的精神满足。", "reversed": "害怕未知、不敢离开有毒的环境、在去留之间挣扎。"},
-  {"name": "圣杯九 (Nine of Cups)", "number": "9", "arcana": "小阿尔卡纳", "suit": "圣杯", "img": "c09.jpg",
-   "upright": "美梦成真、极度的物质与精神满足、个人的得意与享受。", "reversed": "贪婪、自满、过度纵欲或者期待的愿望最终落空。"},
-  {"name": "圣杯十 (Ten of Cups)", "number": "10", "arcana": "小阿尔卡纳", "suit": "圣杯", "img": "c10.jpg",
-   "upright": "美满的家庭、长久的幸福、情感上的终极和谐与平静。", "reversed": "家庭冲突、失去和谐、表面风光但内在情感已经破裂。"},
-  {"name": "圣杯侍从 (Page of Cups)", "number": "11", "arcana": "小阿尔卡纳", "suit": "圣杯", "img": "c11.jpg",
-   "upright": "浪漫的消息、充满想象力的新起点、敏感而温柔的探索。", "reversed": "情感不成熟、过于情绪化、或者收到令人失望的消息。"},
-  {"name": "圣杯骑士 (Knight of Cups)", "number": "12", "arcana": "小阿尔卡纳", "suit": "圣杯", "img": "c12.jpg",
-   "upright": "浪漫的追求者、理想主义、顺从内心的冲动与爱意。", "reversed": "虚伪的承诺、嫉妒心强、或者过于情绪化而不切实际。"},
-  {"name": "圣杯王后 (Queen of Cups)", "number": "13", "arcana": "小阿尔卡纳", "suit": "圣杯", "img": "c13.jpg",
-   "upright": "极强的同理心、温柔、极具直觉力的女性特质与抚慰。", "reversed": "情绪泛滥、过度敏感、容易受外界影响或显得有些病态。"},
-  {"name": "圣杯国王 (King of Cups)", "number": "14", "arcana": "小阿尔卡纳", "suit": "圣杯", "img": "c14.jpg",
-   "upright": "情感掌控力强、宽容、成熟、能冷静处理复杂的人际关系。", "reversed": "操控他人情感、外表冷静但内心冷漠、或者情绪压抑。"},
+  {"number": "3", "arcana": "大阿尔卡纳", "suit": null, "img": "m03.jpg",
+   "nameZh": "皇后", "nameEn": "The Empress", "nameMs": "Maharani",
+   "uprightZh": "丰收、母性、创造力。享受生活美好，计划即将开花结果。",
+   "uprightEn": "Abundance, nurturing, creativity. Enjoy life; your plans are bearing fruit.",
+   "uprightMs": "Kelimpahan, sifat keibuan, kreativiti. Nikmati hidup; usaha anda akan membuahkan hasil.",
+   "reversedZh": "过度依赖、溺爱、创造力受阻。在感情或物质上过于索取。",
+   "reversedEn": "Overdependence, stagnation. Being overly demanding emotionally or materially.",
+   "reversedMs": "Terlalu bergantung, kebuntuan. Terlalu menuntut dari segi emosi atau material."},
 
-  {"name": "宝剑王牌 (Ace of Swords)", "number": "1", "arcana": "小阿尔卡纳", "suit": "宝剑", "img": "s01.jpg",
-   "upright": "清晰的思考、突破性的真相、带来胜利的新理念与决断力。", "reversed": "思维混乱、误解、言语伤人或者计划在初期就遭到挫折。"},
-  {"name": "宝剑二 (Two of Swords)", "number": "2", "arcana": "小阿尔卡纳", "suit": "宝剑", "img": "s02.jpg",
-   "upright": "僵局、逃避现实、在艰难的选择面前蒙住双眼、拒不妥协。", "reversed": "打破僵局、终于看清真相并做出了不得已但必要的选择。"},
-  {"name": "宝剑三 (Three of Swords)", "number": "3", "arcana": "小阿尔卡纳", "suit": "宝剑", "img": "s03.jpg",
-   "upright": "令人心碎的痛苦、悲伤、背叛、或是必须要面对的残酷真相。", "reversed": "痛苦逐渐减轻、开始疗愈内心的创伤、学会释怀与原谅。"},
-  {"name": "宝剑四 (Four of Swords)", "number": "4", "arcana": "小阿尔卡纳", "suit": "宝剑", "img": "s04.jpg",
-   "upright": "休息、恢复、静修冥想、在强烈的压力后需要退避修养。", "reversed": "被迫行动、疲劳过度、或者已经休息完毕准备重新出发。"},
-  {"name": "宝剑五 (Five of Swords)", "number": "5", "arcana": "小阿尔卡纳", "suit": "宝剑", "img": "s05.jpg",
-   "upright": "不择手段的胜利、冲突、损人不利己、充满敌意的环境。", "reversed": "和解、放下恩怨、或者是冲突升级导致不可挽回的伤害。"},
-  {"name": "宝剑六 (Six of Swords)", "number": "6", "arcana": "小阿尔卡纳", "suit": "宝剑", "img": "s06.jpg",
-   "upright": "逐渐渡过难关、向平静的彼岸过渡、带着伤痛继续前行。", "reversed": "困境难逃、抗拒改变、或者过去的阴影仍在纠缠不休。"},
-  {"name": "宝剑七 (Seven of Swords)", "number": "7", "arcana": "小阿尔卡纳", "suit": "宝剑", "img": "s07.jpg",
-   "upright": "欺骗、背着人做事、策略性的撤退或是通过捷径获取利益。", "reversed": "谎言被揭穿、必须面对现实、不再自欺欺人。"},
-  {"name": "宝剑八 (Eight of Swords)", "number": "8", "arcana": "小阿尔卡纳", "suit": "宝剑", "img": "s08.jpg",
-   "upright": "自我限制、感到被束缚、画地为牢，其实解开眼罩就能自由。", "reversed": "挣脱束缚、重获自由、看清了现实并找到了出路。"},
-  {"name": "宝剑九 (Nine of Swords)", "number": "9", "arcana": "小阿尔卡纳", "suit": "宝剑", "img": "s09.jpg",
-   "upright": "极度的焦虑、梦魇、失眠、内疚与过度的精神折磨。", "reversed": "从噩梦中醒来、恐惧减轻、开始正视并解决心中的烦恼。"},
-  {"name": "宝剑十 (Ten of Swords)", "number": "10", "arcana": "小阿尔卡纳", "suit": "宝剑", "img": "s10.jpg",
-   "upright": "毁灭、彻底结束、跌入谷底，但这同时也意味着苦难已到尽头。", "reversed": "绝处逢生、重新开始、从致命的打击中逐渐恢复过来。"},
-  {"name": "宝剑侍从 (Page of Swords)", "number": "11", "arcana": "小阿尔卡纳", "suit": "宝剑", "img": "s11.jpg",
-   "upright": "保持警觉、旺盛的好奇心、直言不讳、机智的观察者。", "reversed": "充满敌意、流言蜚语、显得尖酸刻薄或过于冲动。"},
-  {"name": "宝剑骑士 (Knight of Swords)", "number": "12", "arcana": "小阿尔卡纳", "suit": "宝剑", "img": "s12.jpg",
-   "upright": "行动极其迅速、雷厉风行、急躁的推进者，但也可能缺乏思考。", "reversed": "鲁莽冲撞、不切实际、因过于急躁而导致严重的错误。"},
-  {"name": "宝剑王后 (Queen of Swords)", "number": "13", "arcana": "小阿尔卡纳", "suit": "宝剑", "img": "s13.jpg",
-   "upright": "独立、理智、洞察秋毫、用清晰的逻辑去剥离感情的干扰。", "reversed": "冷酷无情、尖酸刻薄、过度防御或是利用聪明才智去伤人。"},
-  {"name": "宝剑国王 (King of Swords)", "number": "14", "arcana": "小阿尔卡纳", "suit": "宝剑", "img": "s14.jpg",
-   "upright": "绝对的理性、权威、公正、逻辑严密且富有决断力的领导者。", "reversed": "滥用权力、独断专行、操纵欲强或是过于冷血无情。"},
+  {"number": "4", "arcana": "大阿尔卡纳", "suit": null, "img": "m04.jpg",
+   "nameZh": "皇帝", "nameEn": "The Emperor", "nameMs": "Maharaja",
+   "uprightZh": "权力、规则、稳定的基础。需要建立纪律，用理性和意志掌控全局。",
+   "uprightEn": "Authority, rules, stable foundation. Establish discipline and control the situation with logic.",
+   "uprightMs": "Kuasa, peraturan, asas yang stabil. Tegakkan disiplin dan kawal keadaan secara rasional.",
+   "reversedZh": "独裁、僵化、失去控制。过于固执或缺乏自律导致计划崩塌。",
+   "reversedEn": "Dictatorship, rigidity, loss of control. Stubbornness leading to collapsed plans.",
+   "reversedMs": "Diktator, kaku, hilang kawalan. Kedegilan yang membawa kepada kegagalan rancangan."},
 
-  {"name": "权杖王牌 (Ace of Wands)", "number": "1", "arcana": "小阿尔卡纳", "suit": "权杖", "img": "w01.jpg",
-   "upright": "强烈的灵感、爆发的创造力、充满热情的新行动或新计划。", "reversed": "缺乏动力、计划延迟、错失良机或是热情迅速消退。"},
-  {"name": "权杖二 (Two of Wands)", "number": "2", "arcana": "小阿尔卡纳", "suit": "权杖", "img": "w02.jpg",
-   "upright": "长远的规划、远见卓识、站在人生的十字路口决定未来的方向。", "reversed": "害怕未知、缺乏计划、将自己局限在舒适区内不敢探索。"},
-  {"name": "权杖三 (Three of Wands)", "number": "3", "arcana": "小阿尔卡纳", "suit": "权杖", "img": "w03.jpg",
-   "upright": "向外探索、事业初见成效、期待着更广阔的海外或跨界合作。", "reversed": "合作不顺、计划受阻、付出的努力迟迟看不到回报。"},
-  {"name": "权杖四 (Four of Wands)", "number": "4", "arcana": "小阿尔卡纳", "suit": "权杖", "img": "w04.jpg",
-   "upright": "庆祝、稳固的里程碑、繁荣、买房或是迈入婚姻等喜悦时刻。", "reversed": "基础不稳固、失去和谐、庆祝活动被推迟或是家庭出现不和。"},
-  {"name": "权杖五 (Five of Wands)", "number": "5", "arcana": "小阿尔卡纳", "suit": "权杖", "img": "w05.jpg",
-   "upright": "激烈的竞争、冲突、众人七嘴八舌的争辩、意见无法统一。", "reversed": "逃避竞争、达成共识、内部矛盾逐渐平息并找到了解决方法。"},
-  {"name": "权杖六 (Six of Wands)", "number": "6", "arcana": "小阿尔卡纳", "suit": "权杖", "img": "w06.jpg",
-   "upright": "光荣的胜利、获得公众的认可与赞赏、充满自信地站在巅峰。", "reversed": "骄傲自大、失去支持、名誉受损或者是期待的表彰落空。"},
-  {"name": "权杖七 (Seven of Wands)", "number": "7", "arcana": "小阿尔卡纳", "suit": "权杖", "img": "w07.jpg",
-   "upright": "顽强的防御、坚持自己的立场、以一敌多地克服重重阻力。", "reversed": "感到力不从心、屈服于压力、放弃抵抗或是立场动摇。"},
-  {"name": "权杖八 (Eight of Wands)", "number": "8", "arcana": "小阿尔卡纳", "suit": "权杖", "img": "w08.jpg",
-   "upright": "快速的行动、事情飞速进展、即将收到期待已久的消息或旅行。", "reversed": "严重的延迟、失去方向、忙乱中出错或者是沟通遇到障碍。"},
-  {"name": "权杖九 (Nine of Wands)", "number": "9", "arcana": "小阿尔卡纳", "suit": "权杖", "img": "w09.jpg",
-   "upright": "保持警惕、虽然疲惫但仍在坚持最后一道防线、韧性极强。", "reversed": "彻底放弃、过度防御导致偏执、体力和意志力已经耗尽。"},
-  {"name": "权杖十 (Ten of Wands)", "number": "10", "arcana": "小阿尔卡纳", "suit": "权杖", "img": "w10.jpg",
-   "upright": "沉重的负担、压力巨大、一个人扛下了所有责任，过度劳累。", "reversed": "终于卸下重担、学会放权、或是被压力彻底压垮无法承受。"},
-  {"name": "权杖侍从 (Page of Wands)", "number": "11", "arcana": "小阿尔卡纳", "suit": "权杖", "img": "w11.jpg",
-   "upright": "充满活力的探索者、热情的新想法、即将收到令人兴奋的好消息。", "reversed": "缺乏耐心、容易三分钟热度、或者是坏消息的传来。"},
-  {"name": "权杖骑士 (Knight of Wands)", "number": "12", "arcana": "小阿尔卡纳", "suit": "权杖", "img": "w12.jpg",
-   "upright": "勇敢的冒险家、精力充沛、充满激情但有时会显得做事冲动。", "reversed": "鲁莽好战、容易放弃、做事不计后果或者是暴躁易怒。"},
-  {"name": "权杖王后 (Queen of Wands)", "number": "13", "arcana": "小阿尔卡纳", "suit": "权杖", "img": "w13.jpg",
-   "upright": "极具魅力的女性、自信、热情开朗、在职场或社交中大放异彩。", "reversed": "固执己见、嫉妒心重、专横跋扈或是因为情绪失控而惹麻烦。"},
-  {"name": "权杖国王 (King of Wands)", "number": "14", "arcana": "小阿尔卡纳", "suit": "权杖", "img": "w14.jpg",
-   "upright": "天生的领导者、拥有宏大的愿景与非凡的魅力、事业上的开拓者。", "reversed": "独裁专制、冲动傲慢、为了达到目的可能会显得冷酷和霸道。"},
+  {"number": "5", "arcana": "大阿尔卡纳", "suit": null, "img": "m05.jpg",
+   "nameZh": "教皇", "nameEn": "The Hierophant", "nameMs": "Mahaguru",
+   "uprightZh": "传统、信仰、精神指引。遵从规则或寻找经验丰富的导师。",
+   "uprightEn": "Tradition, faith, guidance. Follow the rules or seek an experienced mentor.",
+   "uprightMs": "Tradisi, kepercayaan, panduan rohani. Ikuti peraturan atau cari mentor berpengalaman.",
+   "reversedZh": "打破常规、盲从、挑战权威。不再受制于传统，渴望开创全新道路。",
+   "reversedEn": "Rebellion, blind obedience. Breaking free from traditions to forge a new path.",
+   "reversedMs": "Pemberontakan, patuh membuta tuli. Memecah tradisi untuk membina haluan baru."},
 
-  {"name": "星币王牌 (Ace of Pentacles)", "number": "1", "arcana": "小阿尔卡纳", "suit": "星币", "img": "p01.jpg",
-   "upright": "财富的新起点、实质性的回报、带来物质繁荣的新机遇或投资。", "reversed": "错失良机、财务损失、贪婪或者是新项目缺乏资金支持。"},
-  {"name": "星币二 (Two of Pentacles)", "number": "2", "arcana": "小阿尔卡纳", "suit": "星币", "img": "p02.jpg",
-   "upright": "灵活的资金周转、在多重任务中保持平衡、生活中的变动与适应。", "reversed": "失去平衡、财务危机、手忙脚乱或是过度透支了精力与金钱。"},
-  {"name": "星币三 (Three of Pentacles)", "number": "3", "arcana": "小阿尔卡纳", "suit": "星币", "img": "p03.jpg",
-   "upright": "完美的团队合作、精湛的技艺、在学习和工作中获得了初步成就。", "reversed": "缺乏协作、技术不精、工作态度敷衍或者是团队内部出现分歧。"},
-  {"name": "星币四 (Four of Pentacles)", "number": "4", "arcana": "小阿尔卡纳", "suit": "星币", "img": "p04.jpg",
-   "upright": "保守理财、物质上的安全感、但同时也要注意避免过度吝啬与固执。", "reversed": "挥霍无度、放弃控制、或者是终于学会了分享不再守财奴。"},
-  {"name": "星币五 (Five of Pentacles)", "number": "5", "arcana": "小阿尔卡纳", "suit": "星币", "img": "p05.jpg",
-   "upright": "贫困、孤立无援、物质或健康上的困境，感觉被剥夺了安全感。", "reversed": "经济状况好转、脱离困境、在最黑暗的时候找到了援助之手。"},
-  {"name": "星币六 (Six of Pentacles)", "number": "6", "arcana": "小阿尔卡纳", "suit": "星币", "img": "p06.jpg",
-   "upright": "慷慨、慈善、资源的合理分配、收到奖金或是在需要时获得帮助。", "reversed": "自私自利、债务纠纷、分配不公或者是别人给你的帮助带有附加条件。"},
-  {"name": "星币七 (Seven of Pentacles)", "number": "7", "arcana": "小阿尔卡纳", "suit": "星币", "img": "p07.jpg",
-   "upright": "长远的投资、耐心等待收成、停下来评估目前的进度与付出。", "reversed": "缺乏耐心、投资失败、付出了巨大的努力却没有得到相应的回报。"},
-  {"name": "星币八 (Eight of Pentacles)", "number": "8", "arcana": "小阿尔卡纳", "suit": "星币", "img": "p08.jpg",
-   "upright": "极度的专注、勤奋工作、通过不断打磨工艺来获得专业的提升。", "reversed": "缺乏热情、粗心大意、工作乏味或者是只看重钱而忽略了质量。"},
-  {"name": "星币九 (Nine of Pentacles)", "number": "9", "arcana": "小阿尔卡纳", "suit": "星币", "img": "p09.jpg",
-   "upright": "富足、独立自主、个人的成功与优雅、享受自己辛勤劳动换来的成果。", "reversed": "过度依赖他人、物质匮乏、或者是表面风光背地里却为了钱牺牲了自由。"},
-  {"name": "星币十 (Ten of Pentacles)", "number": "10", "arcana": "小阿尔卡纳", "suit": "星币", "img": "p10.jpg",
-   "upright": "财富的传承、家族的繁荣、长期的财务安全与稳固的物质基础。", "reversed": "财务纠纷、家庭破裂、投资遭受重大损失或者是传统价值的崩塌。"},
-  {"name": "星币侍从 (Page of Pentacles)", "number": "11", "arcana": "小阿尔卡纳", "suit": "星币", "img": "p11.jpg",
-   "upright": "好学务实、脚踏实地的新项目、即将收到关于金钱或事业的可靠消息。", "reversed": "懒惰、缺乏目标、计划不切实际或者是在学习上无法集中注意力。"},
-  {"name": "星币骑士 (Knight of Pentacles)", "number": "12", "arcana": "小阿尔卡纳", "suit": "星币", "img": "p12.jpg",
-   "upright": "稳重勤奋、绝对可靠、虽然进展缓慢但一定会把事情坚持到底。", "reversed": "极其固执、停滞不前、因循守旧或者是工作狂导致忽略了生活。"},
-  {"name": "星币王后 (Queen of Pentacles)", "number": "13", "arcana": "小阿尔卡纳", "suit": "星币", "img": "p13.jpg",
-   "upright": "丰饶、慷慨、贤惠且极具商业头脑、能完美平衡家庭与物质生活。", "reversed": "贪婪、过度依赖物质、极度缺乏安全感或者是忽略了家人的感受。"},
-  {"name": "星币国王 (King of Pentacles)", "number": "14", "arcana": "小阿尔卡纳", "suit": "星币", "img": "p14.jpg",
-   "upright": "巨大的财富、事业上的巅峰、稳重且值得信赖的成功人士或赞助者。", "reversed": "腐败、极端的物质主义、顽固不化或者是为了金钱而不择手段。"}
+  {"number": "6", "arcana": "大阿尔卡纳", "suit": null, "img": "m06.jpg",
+   "nameZh": "恋人", "nameEn": "The Lovers", "nameMs": "Kekasih",
+   "uprightZh": "爱情、和谐。面临重要选择，请遵从真心，充满吸引力的关系正在展开。",
+   "uprightEn": "Love, harmony, choices. Follow your heart in a major decision; an attractive bond is forming.",
+   "uprightMs": "Cinta, keharmonian, pilihan. Ikut kata hati; satu ikatan menarik sedang terbentuk.",
+   "reversedZh": "关系破裂、价值观冲突。感情不和，或面临选择时逃避责任。",
+   "reversedEn": "Broken bond, conflicting values. Relationship disharmony or avoiding responsibility.",
+   "reversedMs": "Hubungan retak, konflik nilai. Ketidakharmonian atau lari dari tanggungjawab."},
+
+  {"number": "7", "arcana": "大阿尔卡纳", "suit": null, "img": "m07.jpg",
+   "nameZh": "战车", "nameEn": "The Chariot", "nameMs": "Kereta Kuda",
+   "uprightZh": "意志力、胜利。通过决心和自律克服一切阻力，成功掌控局面。",
+   "uprightEn": "Willpower, victory. Overcome obstacles with determination and take control.",
+   "uprightMs": "Tekad, kemenangan. Atasi rintangan dengan keazaman dan kuasai keadaan.",
+   "reversedZh": "失去方向、受阻。感到失控，因内心冲突无法向前推进。",
+   "reversedEn": "Lack of direction, blocked. Feeling out of control or paralyzed by inner conflicts.",
+   "reversedMs": "Hilang arah, tersekat. Hilang kawalan atau lumpuh akibat konflik dalaman."},
+
+  {"number": "8", "arcana": "大阿尔卡纳", "suit": null, "img": "m08.jpg",
+   "nameZh": "力量", "nameEn": "Strength", "nameMs": "Kekuatan",
+   "uprightZh": "内在力量、勇气。用温柔化解冲突，力量源于内心的平静与坚韧。",
+   "uprightEn": "Inner strength, courage. Resolve conflicts with gentle compassion and resilience.",
+   "uprightMs": "Kekuatan dalaman, keberanian. Selesaikan konflik dengan kelembutan dan ketabahan.",
+   "reversedZh": "自我怀疑、情绪失控。对能力不自信，被恐惧和愤怒支配。",
+   "reversedEn": "Self-doubt, emotional loss of control. Dominated by fear and insecurity.",
+   "reversedMs": "Ragu-ragu, hilang kawalan emosi. Dikuasai oleh ketakutan dan tidak yakin diri."},
+
+  {"number": "9", "arcana": "大阿尔卡纳", "suit": null, "img": "m09.jpg",
+   "nameZh": "隐士", "nameEn": "The Hermit", "nameMs": "Pertapa",
+   "uprightZh": "内省、寻找内在智慧。暂时远离喧嚣，独处能帮你找到答案。",
+   "uprightEn": "Introspection, seeking inner wisdom. Step away from the noise to find your answers.",
+   "uprightMs": "Muhasabah diri, mencari kebijaksanaan. Jauhkan diri dari kebisingan untuk mencari jawapan.",
+   "reversedZh": "孤立、迷失。过度封闭自我陷入孤独，是时候回到人群中。",
+   "reversedEn": "Isolation, lost. Over-isolation leads to loneliness; it's time to reconnect.",
+   "reversedMs": "Terasing, sesat. Terlalu menyendiri membawa kesepian; masanya untuk kembali berhubung."},
+
+  {"number": "10", "arcana": "大阿尔卡纳", "suit": null, "img": "m10.jpg",
+   "nameZh": "命运之轮", "nameEn": "Wheel of Fortune", "nameMs": "Roda Nasib",
+   "uprightZh": "转机、不可避免的变化。运势好转，顺应生命起伏，抓住好运。",
+   "uprightEn": "Turning point, inevitable change. Luck is improving, ride the wave of destiny.",
+   "uprightMs": "Titik perubahan, nasib yang berubah. Tuah memihak anda, ikuti arus takdir.",
+   "reversedZh": "抗拒改变、暂时的厄运。偏离预期，耐心等待低谷过去。",
+   "reversedEn": "Resisting change, temporary bad luck. Be patient and wait out the low point.",
+   "reversedMs": "Menolak perubahan, nasib malang sementara. Bersabar dan tunggu fasa sukar berlalu."},
+
+  {"number": "11", "arcana": "大阿尔卡纳", "suit": null, "img": "m11.jpg",
+   "nameZh": "正义", "nameEn": "Justice", "nameMs": "Keadilan",
+   "uprightZh": "公平、诚实、因果。理性的决定带来公正结果，过去的作为正产生回报。",
+   "uprightEn": "Fairness, karma. Rational decisions bring just results; you reap what you sow.",
+   "uprightMs": "Keadilan, karma. Keputusan rasional membawa hasil adil; anda menuai apa yang disemai.",
+   "reversedZh": "不公、偏见、逃避责任。面临不公平待遇，或缺乏诚实判断。",
+   "reversedEn": "Injustice, bias, evading responsibility. Facing unfair treatment or dishonesty.",
+   "reversedMs": "Ketidakadilan, prejudis, lari tanggungjawab. Menghadapi ketidakadilan atau penipuan."},
+
+  {"number": "12", "arcana": "大阿尔卡纳", "suit": null, "img": "m12.jpg",
+   "nameZh": "倒吊人", "nameEn": "The Hanged Man", "nameMs": "Orang Tergantung",
+   "uprightZh": "换位思考、自愿牺牲。停滞是为了更深层顿悟，放下无谓的执念。",
+   "uprightEn": "New perspective, surrender. A pause for deeper enlightenment. Let go of control.",
+   "uprightMs": "Perspektif baharu, pengorbanan. Jeda untuk pencerahan. Lepaskan kawalan yang sia-sia.",
+   "reversedZh": "无谓的牺牲、停滞不前。在不值得的事上浪费精力，抗拒改变。",
+   "reversedEn": "Useless sacrifice, stagnation. Wasting energy on unworthy causes and resisting change.",
+   "reversedMs": "Pengorbanan sia-sia, kebuntuan. Membazir tenaga untuk perkara remeh dan menolak perubahan."},
+
+  {"number": "13", "arcana": "大阿尔卡纳", "suit": null, "img": "m13.jpg",
+   "nameZh": "死神", "nameEn": "Death", "nameMs": "Kematian",
+   "uprightZh": "结束与新生。旧阶段彻底结束，勇敢放手，为全新开始腾出空间。",
+   "uprightEn": "Endings and rebirth. A definitive end to the old; brave the transition for a new start.",
+   "uprightMs": "Pengakhiran dan kelahiran semula. Lepaskan yang lama demi permulaan yang baharu.",
+   "reversedZh": "恐惧改变、拒绝现实。紧抓过去不放，只会延长痛苦。",
+   "reversedEn": "Fear of change, denial. Clinging to the past only prolongs your pain.",
+   "reversedMs": "Takut akan perubahan, penafian. Terus berpaut pada masa lalu hanya memanjangkan luka."},
+
+  {"number": "14", "arcana": "大阿尔卡纳", "suit": null, "img": "m14.jpg",
+   "nameZh": "节制", "nameEn": "Temperance", "nameMs": "Kesederhanaan",
+   "uprightZh": "平衡、耐心。将不同元素完美结合，保持情绪稳定，稳步走向治愈。",
+   "uprightEn": "Balance, patience. Blend different elements harmoniously, emotional stability brings healing.",
+   "uprightMs": "Keseimbangan, kesabaran. Gabungkan elemen dengan harmoni, emosi stabil membawa kesembuhan.",
+   "reversedZh": "失衡、极端、缺乏耐心。生活陷入混乱，处理问题手段过于极端。",
+   "reversedEn": "Imbalance, extremes, impatience. Life is chaotic, dealing with issues too extremely.",
+   "reversedMs": "Tidak seimbang, ekstrem, kurang sabar. Kehidupan kacau bilau akibat tindakan ekstrem."},
+
+  {"number": "15", "arcana": "大阿尔卡纳", "suit": null, "img": "m15.jpg",
+   "nameZh": "恶魔", "nameEn": "The Devil", "nameMs": "Iblis",
+   "uprightZh": "诱惑、束缚。被坏习惯或有毒关系所困，其实锁链在你手中。",
+   "uprightEn": "Temptation, bondage. Trapped by toxic habits or relationships, but the key is in your hands.",
+   "uprightMs": "Godaan, belenggu. Terperangkap dalam tabiat toksik, namun kunci kebebasan di tangan anda.",
+   "reversedZh": "挣脱束缚、克服诱惑。意识到问题所在，摆脱阴暗面，找回自控力。",
+   "reversedEn": "Breaking free, overcoming temptation. Reclaiming self-control and escaping the dark side.",
+   "reversedMs": "Bebas dari belenggu, atasi godaan. Mendapatkan semula kawalan diri dan bebas dari kegelapan."},
+
+  {"number": "16", "arcana": "大阿尔卡纳", "suit": null, "img": "m16.jpg",
+   "nameZh": "高塔", "nameEn": "The Tower", "nameMs": "Menara",
+   "uprightZh": "突变、打破虚假的幻象。不稳固的基础将崩塌，虽痛苦却带来彻底解脱。",
+   "uprightEn": "Sudden upheaval, shattering illusions. False foundations fall, bringing painful but true liberation.",
+   "uprightMs": "Pergolakan mengejut, ilusi hancur. Asas palsu runtuh, membawa pembebasan sebenar biarpun perit.",
+   "reversedZh": "害怕改变、拖延结局。竭力维持注定要破裂的假象。",
+   "reversedEn": "Delaying the inevitable, fear of change. Clinging to a failing illusion.",
+   "reversedMs": "Menangguh kesudahan, takut akan perubahan. Berpegang teguh pada ilusi yang pasti hancur."},
+
+  {"number": "17", "arcana": "大阿尔卡纳", "suit": null, "img": "m17.jpg",
+   "nameZh": "星星", "nameEn": "The Star", "nameMs": "Bintang",
+   "uprightZh": "希望、宁静、治愈。风暴过后灵感重新降临，宇宙正在祝福你。",
+   "uprightEn": "Hope, peace, healing. After the storm, inspiration returns under the universe's blessing.",
+   "uprightMs": "Harapan, ketenangan, penyembuhan. Selepas badai, inspirasi kembali diiringi rahmat semesta.",
+   "reversedZh": "绝望、失去信心。对未来失去希望，需要重新找回内心的光芒。",
+   "reversedEn": "Despair, lack of faith. Losing hope in the future; you must find your inner light again.",
+   "reversedMs": "Putus asa, hilang keyakinan. Hilang harapan; anda perlu mencari semula cahaya diri."},
+
+  {"number": "18", "arcana": "大阿尔卡纳", "suit": null, "img": "m18.jpg",
+   "nameZh": "月亮", "nameEn": "The Moon", "nameMs": "Bulan",
+   "uprightZh": "幻觉、恐惧。事情并非表面那样简单，注意隐藏的危险与焦虑。",
+   "uprightEn": "Illusion, fear, anxiety. Things are not as they seem; beware of hidden truths and fears.",
+   "uprightMs": "Ilusi, ketakutan, kebimbangan. Berhati-hati, perkara sebenar mungkin berbeza dari luarannya.",
+   "reversedZh": "揭露真相、摆脱困惑。迷雾散去，看清真相并克服了恐惧。",
+   "reversedEn": "Truth revealed, overcoming fear. The fog lifts, bringing clarity and dispelling anxiety.",
+   "reversedMs": "Kebenaran terbongkar, atasi ketakutan. Kabus menghilang, membawa kejelasan dan ketenangan."},
+
+  {"number": "19", "arcana": "大阿尔卡纳", "suit": null, "img": "m19.jpg",
+   "nameZh": "太阳", "nameEn": "The Sun", "nameMs": "Matahari",
+   "uprightZh": "成功、快乐。一切朝着最好方向发展，努力将获得极大满足。",
+   "uprightEn": "Success, joy, vitality. Everything is going perfectly; your efforts will bring great fulfillment.",
+   "uprightMs": "Kejayaan, kegembiraan. Segalanya berjalan lancar; usaha anda akan memberi kepuasan besar.",
+   "reversedZh": "暂时的阴霾、成功延迟。需要付出更多努力才能见到彩虹。",
+   "reversedEn": "Temporary clouds, delayed success. Joy is slightly dimmed, requires more effort to shine.",
+   "reversedMs": "Awan mendung sementara, kejayaan tertunda. Memerlukan usaha ekstra untuk melihat pelangi."},
+
+  {"number": "20", "arcana": "大阿尔卡纳", "suit": null, "img": "m20.jpg",
+   "nameZh": "审判", "nameEn": "Judgement", "nameMs": "Penghakiman",
+   "uprightZh": "觉醒、重生。总结过去、宽恕自己，作出影响深远的决定。",
+   "uprightEn": "Awakening, rebirth. Time to reflect, forgive, and make profound life-changing choices.",
+   "uprightMs": "Kesedaran, kelahiran semula. Masa untuk memaafkan masa lalu dan membuat pilihan besar.",
+   "reversedZh": "自我怀疑、拒绝面对。因过去的内疚而不敢迎接新阶段。",
+   "reversedEn": "Self-doubt, refusal to face facts. Past guilt holds you back from a new beginning.",
+   "reversedMs": "Keraguan diri, lari dari kenyataan. Rasa bersalah menghalang permulaan baharu."},
+
+  {"number": "21", "arcana": "大阿尔卡纳", "suit": null, "img": "m21.jpg",
+   "nameZh": "世界", "nameEn": "The World", "nameMs": "Dunia",
+   "uprightZh": "圆满、成功的终点。重要周期完美结束，即将迈入更高层次。",
+   "uprightEn": "Completion, ultimate success. A major cycle ends perfectly, opening doors to higher levels.",
+   "uprightMs": "Kesempurnaan, kejayaan mutlak. Kitaran tamat dengan indah, membuka pintu ke tahap yang lebih tinggi.",
+   "reversedZh": "未完成、停滞。距离成功仅一步之遥，因未解决的问题暂时受阻。",
+   "reversedEn": "Incomplete, stagnation. One step away from success, delayed by unresolved loose ends.",
+   "reversedMs": "Tidak lengkap, terbantut. Tinggal selangkah lagi menuju kejayaan, dihalang isu tertunggak."},
+
+
+  // ================= CUPS (圣杯 / Piala) =================
+  {"number": "1", "arcana": "小阿尔卡纳", "suit": "圣杯", "img": "c01.jpg",
+   "nameZh": "圣杯王牌", "nameEn": "Ace of Cups", "nameMs": "As Piala",
+   "uprightZh": "感情的崭新开始、新恋情或新友谊的诞生。",
+   "uprightEn": "A new beginning of emotions, the birth of a new romance or friendship.",
+   "uprightMs": "Permulaan emosi yang baharu, percintaan atau persahabatan baru terjalin.",
+   "reversedZh": "情感枯竭、单相思或冷漠。",
+   "reversedEn": "Emotional drain, unrequited love, or apathy.",
+   "reversedMs": "Keletihan emosi, cinta bertepuk sebelah tangan, atau sikap dingin."},
+  {"number": "2", "arcana": "小阿尔卡纳", "suit": "圣杯", "img": "c02.jpg",
+   "nameZh": "圣杯二", "nameEn": "Two of Cups", "nameMs": "Dua Piala",
+   "uprightZh": "完美的伴侣关系、互相吸引与和谐的合作。",
+   "uprightEn": "A perfect partnership, mutual attraction, and harmonious cooperation.",
+   "uprightMs": "Pasangan yang sempurna, daya tarikan bersama, dan kerjasama harmoni.",
+   "reversedZh": "关系破裂、沟通不畅或产生不信任。",
+   "reversedEn": "Broken relationship, poor communication, or distrust.",
+   "reversedMs": "Hubungan retak, komunikasi yang lemah, atau hilang kepercayaan."},
+  {"number": "3", "arcana": "小阿尔卡纳", "suit": "圣杯", "img": "c03.jpg",
+   "nameZh": "圣杯三", "nameEn": "Three of Cups", "nameMs": "Tiga Piala",
+   "uprightZh": "庆祝、欢乐的聚会、美好的友谊与分享。",
+   "uprightEn": "Celebration, joyful gatherings, beautiful friendship and sharing.",
+   "uprightMs": "Keraian, pertemuan gembira, ikatan persahabatan yang indah.",
+   "reversedZh": "过度放纵、乐极生悲或出现第三方的干扰。",
+   "reversedEn": "Overindulgence, joy turning to sorrow, or third-party interference.",
+   "reversedMs": "Tersasar batas, keseronokan membawa padah, atau gangguan pihak ketiga."},
+  {"number": "4", "arcana": "小阿尔卡纳", "suit": "圣杯", "img": "c04.jpg",
+   "nameZh": "圣杯四", "nameEn": "Four of Cups", "nameMs": "Empat Piala",
+   "uprightZh": "厌倦、冷漠，对现状不满而错失了外界的新机遇。",
+   "uprightEn": "Apathy, boredom, dissatisfaction causing you to miss new opportunities.",
+   "uprightMs": "Rasa bosan, tidak peduli, ketidakpuasan hati membuat anda terlepas peluang.",
+   "reversedZh": "重新振作、走出低谷，开始愿意接受新事物。",
+   "reversedEn": "Renewed vigor, breaking out of a slump, ready for new things.",
+   "reversedMs": "Semangat kembali pulih, bangkit dari kesedihan, sedia menerima perkara baharu."},
+  {"number": "5", "arcana": "小阿尔卡纳", "suit": "圣杯", "img": "c05.jpg",
+   "nameZh": "圣杯五", "nameEn": "Five of Cups", "nameMs": "Lima Piala",
+   "uprightZh": "悲伤、失落，沉溺于失去的事物而忽略了剩下的美好。",
+   "uprightEn": "Grief, loss, dwelling on the past and ignoring what still remains.",
+   "uprightMs": "Kesedihan, kehilangan, terlalu meratapi memori lalu dan buta pada apa yang ada.",
+   "reversedZh": "逐渐走出阴霾、释怀过去的伤痛。",
+   "reversedEn": "Gradually moving on from grief and letting go of past pain.",
+   "reversedMs": "Mula melangkah ke depan, melepaskan kesakitan masa lalu."},
+  {"number": "6", "arcana": "小阿尔卡纳", "suit": "圣杯", "img": "c06.jpg",
+   "nameZh": "圣杯六", "nameEn": "Six of Cups", "nameMs": "Enam Piala",
+   "uprightZh": "童年的回忆、纯真的感情、故人重逢。",
+   "uprightEn": "Childhood memories, innocence, nostalgia, or reuniting with an old friend.",
+   "uprightMs": "Kenangan zaman kanak-kanak, kepolosan, atau bertemu kembali rakan lama.",
+   "reversedZh": "过度沉溺过去、拒绝成长。",
+   "reversedEn": "Overly stuck in the past, refusing to grow up or move forward.",
+   "reversedMs": "Terperangkap di masa lalu, menolak kedewasaan dan kenyataan."},
+  {"number": "7", "arcana": "小阿尔卡纳", "suit": "圣杯", "img": "c07.jpg",
+   "nameZh": "圣杯七", "nameEn": "Seven of Cups", "nameMs": "Tujuh Piala",
+   "uprightZh": "充满幻象与选择，需要看清什么才是真实的。",
+   "uprightEn": "Illusions, daydreaming, having many choices but needing to see reality.",
+   "uprightMs": "Ilusi, angan-angan, banyak pilihan tetapi perlu melihat realiti sebenar.",
+   "reversedZh": "认清现实、做出明确的决定。",
+   "reversedEn": "Facing reality, making a clear and decisive choice.",
+   "reversedMs": "Menerima hakikat, membuat keputusan yang muktamad."},
+  {"number": "8", "arcana": "小阿尔卡纳", "suit": "圣杯", "img": "c08.jpg",
+   "nameZh": "圣杯八", "nameEn": "Eight of Cups", "nameMs": "Lapan Piala",
+   "uprightZh": "放弃现有的安逸，转身离开去追寻更高的精神满足。",
+   "uprightEn": "Walking away from comfort to seek a higher spiritual fulfillment.",
+   "uprightMs": "Meninggalkan keselesaan demi mencari kepuasan rohani yang lebih tinggi.",
+   "reversedZh": "害怕未知、不敢离开有毒的环境。",
+   "reversedEn": "Fear of the unknown, afraid to leave a toxic or stagnant environment.",
+   "reversedMs": "Takut akan masa depan, tidak berani keluar dari persekitaran toksik."},
+  {"number": "9", "arcana": "小阿尔卡纳", "suit": "圣杯", "img": "c09.jpg",
+   "nameZh": "圣杯九", "nameEn": "Nine of Cups", "nameMs": "Sembilan Piala",
+   "uprightZh": "美梦成真、极度的物质与精神满足。",
+   "uprightEn": "Wishes fulfilled, extreme material and emotional satisfaction.",
+   "uprightMs": "Impian tercapai, kepuasan material dan emosi yang mutlak.",
+   "reversedZh": "贪婪、自满或期待的愿望最终落空。",
+   "reversedEn": "Greed, smugness, or unfulfilled expectations.",
+   "reversedMs": "Tamak, bongkak, atau harapan yang akhirnya berkecai."},
+  {"number": "10", "arcana": "小阿尔卡纳", "suit": "圣杯", "img": "c10.jpg",
+   "nameZh": "圣杯十", "nameEn": "Ten of Cups", "nameMs": "Sepuluh Piala",
+   "uprightZh": "美满的家庭、长久的幸福与终极的情感和谐。",
+   "uprightEn": "A happy family, long-lasting joy, and ultimate emotional harmony.",
+   "uprightMs": "Keluarga yang bahagia, kegembiraan abadi, dan keharmonian mutlak.",
+   "reversedZh": "家庭冲突、失去和谐，表面风光内在破裂。",
+   "reversedEn": "Family conflicts, broken harmony, a facade of happiness.",
+   "reversedMs": "Konflik keluarga, hilang keharmonian, bahagia hanya pada luaran."},
+  {"number": "11", "arcana": "小阿尔卡纳", "suit": "圣杯", "img": "c11.jpg",
+   "nameZh": "圣杯侍从", "nameEn": "Page of Cups", "nameMs": "Pengiring Piala",
+   "uprightZh": "浪漫的消息、充满想象力的新起点。",
+   "uprightEn": "Romantic news, an imaginative and sensitive new beginning.",
+   "uprightMs": "Berita romantik, permulaan baharu yang penuh imaginasi dan kelembutan.",
+   "reversedZh": "情感不成熟、过于情绪化或收到失望的消息。",
+   "reversedEn": "Emotional immaturity, overly sensitive, or disappointing news.",
+   "reversedMs": "Emosi tidak matang, terlalu sensitif, atau berita yang mengecewakan."},
+  {"number": "12", "arcana": "小阿尔卡纳", "suit": "圣杯", "img": "c12.jpg",
+   "nameZh": "圣杯骑士", "nameEn": "Knight of Cups", "nameMs": "Kesatria Piala",
+   "uprightZh": "浪漫的追求者、理想主义、顺从内心的爱意。",
+   "uprightEn": "A romantic pursuer, an idealist following the heart's calling.",
+   "uprightMs": "Pengejar romantis, seorang idealis yang mengikut panggilan hati.",
+   "reversedZh": "虚伪的承诺、嫉妒心强或过于情绪化。",
+   "reversedEn": "False promises, extreme jealousy, or unrealistic emotionality.",
+   "reversedMs": "Janji manis palsu, cemburu buta, atau terlalu beremosi."},
+  {"number": "13", "arcana": "小阿尔卡纳", "suit": "圣杯", "img": "c13.jpg",
+   "nameZh": "圣杯王后", "nameEn": "Queen of Cups", "nameMs": "Ratu Piala",
+   "uprightZh": "极强的同理心、温柔、极具直觉力的抚慰。",
+   "uprightEn": "Deep empathy, gentle, highly intuitive, and nurturing.",
+   "uprightMs": "Empati yang mendalam, lembut, penuh intuisi, dan penyayang.",
+   "reversedZh": "情绪泛滥、过度敏感或显得有些病态。",
+   "reversedEn": "Emotional overflow, overly sensitive, or toxic dependency.",
+   "reversedMs": "Emosi meluap-luap, terlampau sensitif, atau bergantungan toksik."},
+  {"number": "14", "arcana": "小阿尔卡纳", "suit": "圣杯", "img": "c14.jpg",
+   "nameZh": "圣杯国王", "nameEn": "King of Cups", "nameMs": "Raja Piala",
+   "uprightZh": "情感掌控力强、宽容、能冷静处理复杂的人际关系。",
+   "uprightEn": "Emotional mastery, tolerant, handles complex relations with calm wisdom.",
+   "uprightMs": "Kawal emosi cemerlang, bertoleransi, mengurus hubungan kompleks dengan tenang.",
+   "reversedZh": "操控他人情感、外表冷静但内心冷漠或压抑。",
+   "reversedEn": "Emotional manipulation, cold under a calm exterior, repressed feelings.",
+   "reversedMs": "Memanipulasi emosi, nampak tenang tapi dingin di dalam, emosi terpendam."},
+
+  // ================= SWORDS (宝剑 / Pedang) =================
+  {"number": "1", "arcana": "小阿尔卡纳", "suit": "宝剑", "img": "s01.jpg",
+   "nameZh": "宝剑王牌", "nameEn": "Ace of Swords", "nameMs": "As Pedang",
+   "uprightZh": "清晰的思考、突破性的真相与决断力。",
+   "uprightEn": "Clear thinking, breakthrough truth, and decisive power.",
+   "uprightMs": "Pemikiran yang jelas, kebenaran terungkap, dan kuasa membuat keputusan.",
+   "reversedZh": "思维混乱、误解、言语伤人或计划受挫。",
+   "reversedEn": "Mental confusion, misunderstandings, harsh words, or blocked plans.",
+   "reversedMs": "Kekeliruan minda, salah faham, kata-kata tajam, atau rancangan terhalang."},
+  {"number": "2", "arcana": "小阿尔卡纳", "suit": "宝剑", "img": "s02.jpg",
+   "nameZh": "宝剑二", "nameEn": "Two of Swords", "nameMs": "Dua Pedang",
+   "uprightZh": "僵局、逃避现实，在艰难选择面前蒙住双眼。",
+   "uprightEn": "Stalemate, avoidance, being blindfolded to a tough choice.",
+   "uprightMs": "Kebuntuan, lari dari kenyataan, menutup mata dari pilihan yang sukar.",
+   "reversedZh": "打破僵局，终于看清真相并做出选择。",
+   "reversedEn": "Breaking the stalemate, finally facing the truth and choosing.",
+   "reversedMs": "Memecah kebuntuan, akhirnya melihat kebenaran dan membuat keputusan."},
+  {"number": "3", "arcana": "小阿尔卡纳", "suit": "宝剑", "img": "s03.jpg",
+   "nameZh": "宝剑三", "nameEn": "Three of Swords", "nameMs": "Tiga Pedang",
+   "uprightZh": "令人心碎的痛苦、悲伤、背叛或残酷的真相。",
+   "uprightEn": "Heartbreak, sorrow, betrayal, or facing a cruel truth.",
+   "uprightMs": "Kelukaan hati, kesedihan, pengkhianatan, atau berdepan kebenaran perit.",
+   "reversedZh": "痛苦减轻、开始疗愈内心伤创。",
+   "reversedEn": "Pain lessening, beginning the process of inner healing and forgiveness.",
+   "reversedMs": "Kesakitan beransur hilang, mula memaafkan dan menyembuhkan luka dalaman."},
+  {"number": "4", "arcana": "小阿尔卡纳", "suit": "宝剑", "img": "s04.jpg",
+   "nameZh": "宝剑四", "nameEn": "Four of Swords", "nameMs": "Empat Pedang",
+   "uprightZh": "休息、恢复、静修冥想，需要退避修养。",
+   "uprightEn": "Rest, recovery, meditation, a necessary retreat to recharge.",
+   "uprightMs": "Berehat, pemulihan, meditasi, berundur seketika untuk kumpul tenaga.",
+   "reversedZh": "被迫行动、疲劳过度，或休息完毕重新出发。",
+   "reversedEn": "Forced action, exhaustion, or being fully rested and ready to go.",
+   "reversedMs": "Terpaksa bertindak, kepenatan melampau, atau sudah bersedia untuk maju."},
+  {"number": "5", "arcana": "小阿尔卡纳", "suit": "宝剑", "img": "s05.jpg",
+   "nameZh": "宝剑五", "nameEn": "Five of Swords", "nameMs": "Lima Pedang",
+   "uprightZh": "不择手段的胜利、冲突、充满敌意的环境。",
+   "uprightEn": "Victory at all costs, conflict, a hostile and toxic environment.",
+   "uprightMs": "Menang tanpa mengira cara, konflik, persekitaran yang bermusuhan.",
+   "reversedZh": "和解、放下恩怨，或冲突升级导致不可挽回的伤害。",
+   "reversedEn": "Reconciliation, dropping grudges, or a conflict escalating irreparably.",
+   "reversedMs": "Berdamai, membuang dendam, atau konflik memuncak tanpa jalan kembali."},
+  {"number": "6", "arcana": "小阿尔卡纳", "suit": "宝剑", "img": "s06.jpg",
+   "nameZh": "宝剑六", "nameEn": "Six of Swords", "nameMs": "Enam Pedang",
+   "uprightZh": "逐渐渡过难关、向平静彼岸过渡，带着伤痛前行。",
+   "uprightEn": "Passing through difficulties, moving towards calmer waters despite past scars.",
+   "uprightMs": "Beransur pulih dari masalah, menuju ketenangan walau membawa luka lama.",
+   "reversedZh": "困境难逃、抗拒改变，过去的阴影纠缠不休。",
+   "reversedEn": "Stuck in hardship, resisting change, haunted by the past.",
+   "reversedMs": "Terperangkap dalam masalah, menolak perubahan, dihantui bayangan lalu."},
+  {"number": "7", "arcana": "小阿尔卡纳", "suit": "宝剑", "img": "s07.jpg",
+   "nameZh": "宝剑七", "nameEn": "Seven of Swords", "nameMs": "Tujuh Pedang",
+   "uprightZh": "欺骗、背着人做事，或通过捷径获取利益。",
+   "uprightEn": "Deception, sneaking around, or taking shortcuts to gain an advantage.",
+   "uprightMs": "Penipuan, sembunyi-sembunyi, atau mengambil jalan pintas untuk untung.",
+   "reversedZh": "谎言被揭穿、必须面对现实，不再自欺欺人。",
+   "reversedEn": "Lies exposed, forced to face reality, no more self-deception.",
+   "reversedMs": "Pembohongan terbongkar, terpaksa terima realiti, tiada lagi tipu muslihat."},
+  {"number": "8", "arcana": "小阿尔卡纳", "suit": "宝剑", "img": "s08.jpg",
+   "nameZh": "宝剑八", "nameEn": "Eight of Swords", "nameMs": "Lapan Pedang",
+   "uprightZh": "自我限制、感到被束缚，解开眼罩就能自由。",
+   "uprightEn": "Self-imposed restriction, feeling trapped. Freedom comes by opening your eyes.",
+   "uprightMs": "Menyekat diri sendiri, berasa terkurung. Buka penutup mata untuk bebas.",
+   "reversedZh": "挣脱束缚、重获自由，看清现实并找到出路。",
+   "reversedEn": "Breaking free, reclaiming freedom, seeing clearly and finding a way out.",
+   "reversedMs": "Memutuskan rantaian, bebas semula, melihat dengan jelas untuk mencari jalan keluar."},
+  {"number": "9", "arcana": "小阿尔卡纳", "suit": "宝剑", "img": "s09.jpg",
+   "nameZh": "宝剑九", "nameEn": "Nine of Swords", "nameMs": "Sembilan Pedang",
+   "uprightZh": "极度焦虑、失眠噩梦，内疚与过度的精神折磨。",
+   "uprightEn": "Extreme anxiety, nightmares, guilt, and deep mental anguish.",
+   "uprightMs": "Keresahan melampau, mimpi ngeri, rasa bersalah, dan seksaan mental.",
+   "reversedZh": "从噩梦中醒来、恐惧减轻，正视心中的烦恼。",
+   "reversedEn": "Waking from the nightmare, easing fears, facing your worries.",
+   "reversedMs": "Bangkit dari mimpi buruk, reda ketakutan, berani hadapi masalah hati."},
+  {"number": "10", "arcana": "小阿尔卡纳", "suit": "宝剑", "img": "s10.jpg",
+   "nameZh": "宝剑十", "nameEn": "Ten of Swords", "nameMs": "Sepuluh Pedang",
+   "uprightZh": "毁灭、彻底结束，跌入谷底，意味着苦难已到尽头。",
+   "uprightEn": "Ruin, absolute ending, hitting rock bottom. The suffering is finally over.",
+   "uprightMs": "Kemusnahan, pengakhiran mutlak, jatuh teruk. Derita telah pun di penghujung.",
+   "reversedZh": "绝处逢生、重新开始，从打击中逐渐恢复过来。",
+   "reversedEn": "Survival, fresh start, slowly recovering from a fatal blow.",
+   "reversedMs": "Sinar di hujung terowong, mula semula, beransur pulih dari tamparan hebat."},
+  {"number": "11", "arcana": "小阿尔卡纳", "suit": "宝剑", "img": "s11.jpg",
+   "nameZh": "宝剑侍从", "nameEn": "Page of Swords", "nameMs": "Pengiring Pedang",
+   "uprightZh": "保持警觉、旺盛好奇心，直言不讳的观察者。",
+   "uprightEn": "Alert, deeply curious, blunt speaker, and sharp observer.",
+   "uprightMs": "Peka, penuh rasa ingin tahu, jujur bersuara, dan pemerhati tajam.",
+   "reversedZh": "充满敌意、流言蜚语、显得尖酸刻薄。",
+   "reversedEn": "Hostility, gossip, coming off as bitter or overly sarcastic.",
+   "reversedMs": "Permusuhan, khabar angin, mulut tajam dan menyakitkan hati."},
+  {"number": "12", "arcana": "小阿尔卡纳", "suit": "宝剑", "img": "s12.jpg",
+   "nameZh": "宝剑骑士", "nameEn": "Knight of Swords", "nameMs": "Kesatria Pedang",
+   "uprightZh": "行动迅速、雷厉风行，但也可能缺乏思考。",
+   "uprightEn": "Swift action, moving at lightning speed, but potentially reckless.",
+   "uprightMs": "Tindakan pantas, bergerak sepantas kilat, tapi mungkin terburu-buru.",
+   "reversedZh": "鲁莽冲撞、不切实际，因急躁导致严重错误。",
+   "reversedEn": "Reckless, impractical, causing major mistakes due to impatience.",
+   "reversedMs": "Gopoh, tidak realistik, mengundang kesilapan besar kerana hilang sabar."},
+  {"number": "13", "arcana": "小阿尔卡纳", "suit": "宝剑", "img": "s13.jpg",
+   "nameZh": "宝剑王后", "nameEn": "Queen of Swords", "nameMs": "Ratu Pedang",
+   "uprightZh": "独立、理智，用清晰的逻辑去剥离感情的干扰。",
+   "uprightEn": "Independent, rational, cutting through emotional fog with clear logic.",
+   "uprightMs": "Berdikari, rasional, menepis gangguan emosi dengan logik yang tajam.",
+   "reversedZh": "冷酷无情、尖酸刻薄或利用聪明才智去伤人。",
+   "reversedEn": "Cold-hearted, overly critical, using intellect to hurt others.",
+   "reversedMs": "Dingin, sangat kritis, menggunakan kepintaran untuk melukakan orang lain."},
+  {"number": "14", "arcana": "小阿尔卡纳", "suit": "宝剑", "img": "s14.jpg",
+   "nameZh": "宝剑国王", "nameEn": "King of Swords", "nameMs": "Raja Pedang",
+   "uprightZh": "绝对理性、公正，逻辑严密且富有决断力的领导者。",
+   "uprightEn": "Pure logic, fairness, a highly analytical and decisive leader.",
+   "uprightMs": "Logik mutlak, keadilan, pemimpin yang analitikal dan tegas.",
+   "reversedZh": "滥用权力、独断专行或过于冷血无情。",
+   "reversedEn": "Abusing power, dictatorial, or excessively cold and merciless.",
+   "reversedMs": "Salah guna kuasa, diktator, atau terlampau kejam tanpa belas kasihan."},
+
+  // ================= WANDS (权杖 / Tongkat) =================
+  {"number": "1", "arcana": "小阿尔卡纳", "suit": "权杖", "img": "w01.jpg",
+   "nameZh": "权杖王牌", "nameEn": "Ace of Wands", "nameMs": "As Tongkat",
+   "uprightZh": "强烈的灵感、爆发的创造力与充满热情的新计划。",
+   "uprightEn": "Intense inspiration, explosive creativity, and a passionate new plan.",
+   "uprightMs": "Inspirasi hebat, kreativiti meledak, dan rancangan baru yang penuh semangat.",
+   "reversedZh": "缺乏动力、计划延迟或热情迅速消退。",
+   "reversedEn": "Lack of drive, delayed plans, or rapidly fading enthusiasm.",
+   "reversedMs": "Kurang motivasi, rancangan tertunda, atau semangat cepat pudar."},
+  {"number": "2", "arcana": "小阿尔卡纳", "suit": "权杖", "img": "w02.jpg",
+   "nameZh": "权杖二", "nameEn": "Two of Wands", "nameMs": "Dua Tongkat",
+   "uprightZh": "长远的规划、远见，站在十字路口决定未来方向。",
+   "uprightEn": "Long-term planning, vision, standing at a crossroads deciding the future.",
+   "uprightMs": "Perancangan jangka panjang, visi, di persimpangan memilih arah depan.",
+   "reversedZh": "害怕未知、将自己局限在舒适区内不敢探索。",
+   "reversedEn": "Fear of the unknown, trapping oneself in a comfort zone.",
+   "reversedMs": "Takut mencuba, terperangkap dalam zon selesa tanpa berani meneroka."},
+  {"number": "3", "arcana": "小阿尔卡纳", "suit": "权杖", "img": "w03.jpg",
+   "nameZh": "权杖三", "nameEn": "Three of Wands", "nameMs": "Tiga Tongkat",
+   "uprightZh": "向外探索、事业初见成效，期待跨界或海外合作。",
+   "uprightEn": "Outward expansion, initial success, anticipating overseas or wider collaborations.",
+   "uprightMs": "Peluasan pengaruh, kejayaan awal, menunggu kerjasama seberang laut.",
+   "reversedZh": "合作不顺、计划受阻，努力迟迟看不到回报。",
+   "reversedEn": "Failing collaborations, blocked plans, unrewarded efforts.",
+   "reversedMs": "Kerjasama gagal, rancangan tersekat, usaha belum membuahkan hasil."},
+  {"number": "4", "arcana": "小阿尔卡纳", "suit": "权杖", "img": "w04.jpg",
+   "nameZh": "权杖四", "nameEn": "Four of Wands", "nameMs": "Empat Tongkat",
+   "uprightZh": "庆祝、稳固的里程碑、繁荣，买房或步入婚姻的喜悦。",
+   "uprightEn": "Celebration, solid milestones, prosperity, buying a home or marriage.",
+   "uprightMs": "Keraian, pencapaian kukuh, kemakmuran, membeli rumah atau perkahwinan.",
+   "reversedZh": "基础不稳、失去和谐，庆祝活动被推迟。",
+   "reversedEn": "Unstable foundations, lost harmony, or delayed celebrations.",
+   "reversedMs": "Asas yang rapuh, hilang keharmonian, keraian terpaksa ditunda."},
+  {"number": "5", "arcana": "小阿尔卡纳", "suit": "权杖", "img": "w05.jpg",
+   "nameZh": "权杖五", "nameEn": "Five of Wands", "nameMs": "Lima Tongkat",
+   "uprightZh": "激烈竞争、冲突，众人七嘴八舌无法统一意见。",
+   "uprightEn": "Fierce competition, conflicts, chaotic disagreements and clashes.",
+   "uprightMs": "Persaingan sengit, konflik, kekacauan dan perbezaan pendapat.",
+   "reversedZh": "达成共识、内部矛盾逐渐平息。",
+   "reversedEn": "Finding consensus, avoiding conflict, internal disputes settling down.",
+   "reversedMs": "Mencapai persetujuan, elak konflik, pertelingkahan dalaman mula reda."},
+  {"number": "6", "arcana": "小阿尔卡纳", "suit": "权杖", "img": "w06.jpg",
+   "nameZh": "权杖六", "nameEn": "Six of Wands", "nameMs": "Enam Tongkat",
+   "uprightZh": "光荣的胜利、获得公众认可，自信站在巅峰。",
+   "uprightEn": "Glorious victory, public recognition, standing proudly at the peak.",
+   "uprightMs": "Kemenangan gemilang, pengiktirafan ramai, berdiri bangga di puncak.",
+   "reversedZh": "骄傲自大、失去支持或期待的表彰落空。",
+   "reversedEn": "Arrogance, lost support, or expected recognition falls through.",
+   "reversedMs": "Sikap bongkak, hilang sokongan, atau pujian yang tidak kunjung tiba."},
+  {"number": "7", "arcana": "小阿尔卡纳", "suit": "权杖", "img": "w07.jpg",
+   "nameZh": "权杖七", "nameEn": "Seven of Wands", "nameMs": "Tujuh Tongkat",
+   "uprightZh": "顽强的防御、坚持立场，克服重重阻力。",
+   "uprightEn": "Tenacious defense, standing your ground, overcoming heavy opposition.",
+   "uprightMs": "Pertahanan teguh, mempertahankan prinsip, mengatasi rintangan hebat.",
+   "reversedZh": "感到力不从心、屈服于压力或立场动摇。",
+   "reversedEn": "Feeling overwhelmed, yielding to pressure, or wavering stance.",
+   "reversedMs": "Rasa tidak mampu, mengalah pada tekanan, atau goyah pendirian."},
+  {"number": "8", "arcana": "小阿尔卡纳", "suit": "权杖", "img": "w08.jpg",
+   "nameZh": "权杖八", "nameEn": "Eight of Wands", "nameMs": "Lapan Tongkat",
+   "uprightZh": "快速行动、飞速进展，即将收到期待的消息。",
+   "uprightEn": "Rapid action, swift progress, incoming exciting news or travel.",
+   "uprightMs": "Tindakan pantas, kemajuan laju, berita gembira bakal tiba.",
+   "reversedZh": "严重延迟、失去方向或沟通障碍出错。",
+   "reversedEn": "Severe delays, lost direction, miscommunication leading to errors.",
+   "reversedMs": "Kelewatan teruk, hilang arah, salah faham membawa kepada kesilapan."},
+  {"number": "9", "arcana": "小阿尔卡纳", "suit": "权杖", "img": "w09.jpg",
+   "nameZh": "权杖九", "nameEn": "Nine of Wands", "nameMs": "Sembilan Tongkat",
+   "uprightZh": "保持警惕、虽然疲惫但仍坚守阵地，韧性极强。",
+   "uprightEn": "Vigilant, exhausted but holding the last line of defense, high resilience.",
+   "uprightMs": "Berwaspada, keletihan tetapi teguh bertahan, daya tahan sangat tinggi.",
+   "reversedZh": "彻底放弃、过度防御导致偏执，意志力耗尽。",
+   "reversedEn": "Giving up, paranoia from over-defense, willpower completely drained.",
+   "reversedMs": "Menyerah kalah, paranoid akibat terlalu bertahan, semangat luntur."},
+  {"number": "10", "arcana": "小阿尔卡纳", "suit": "权杖", "img": "w10.jpg",
+   "nameZh": "权杖十", "nameEn": "Ten of Wands", "nameMs": "Sepuluh Tongkat",
+   "uprightZh": "沉重的负担、扛下所有责任，过度劳累。",
+   "uprightEn": "Heavy burden, immense pressure, shouldering all responsibilities, burnout.",
+   "uprightMs": "Beban berat, tekanan kuat, memikul semua tanggungjawab sendirian, keletihan.",
+   "reversedZh": "卸下重担、学会放权，或被压力压垮。",
+   "reversedEn": "Releasing the burden, learning to delegate, or collapsing under pressure.",
+   "reversedMs": "Melepaskan beban, belajar membahagi tugas, atau rebah akibat tekanan."},
+  {"number": "11", "arcana": "小阿尔卡纳", "suit": "权杖", "img": "w11.jpg",
+   "nameZh": "权杖侍从", "nameEn": "Page of Wands", "nameMs": "Pengiring Tongkat",
+   "uprightZh": "充满活力的探索者、热情的新想法与好消息。",
+   "uprightEn": "Energetic explorer, passionate new ideas, and exciting news.",
+   "uprightMs": "Peneroka bertenaga, idea baharu yang penuh semangat dan berita baik.",
+   "reversedZh": "缺乏耐心、三分钟热度或坏消息传来。",
+   "reversedEn": "Lack of patience, short-lived passion, or receiving bad news.",
+   "reversedMs": "Kurang sabar, hangat-hangat tahi ayam, atau berita buruk tiba."},
+  {"number": "12", "arcana": "小阿尔卡纳", "suit": "权杖", "img": "w12.jpg",
+   "nameZh": "权杖骑士", "nameEn": "Knight of Wands", "nameMs": "Kesatria Tongkat",
+   "uprightZh": "勇敢的冒险家、精力充沛，但做事可能冲动。",
+   "uprightEn": "Brave adventurer, full of energy, but can be impulsive.",
+   "uprightMs": "Pengembara berani, penuh tenaga, tetapi kadangkala bertindak melulu.",
+   "reversedZh": "鲁莽好战、做事不计后果或暴躁易怒。",
+   "reversedEn": "Reckless, combative, acting without thinking of consequences, angry.",
+   "reversedMs": "Semberono, suka berlawan, bertindak tanpa fikir panjang, cepat marah."},
+  {"number": "13", "arcana": "小阿尔卡纳", "suit": "权杖", "img": "w13.jpg",
+   "nameZh": "权杖王后", "nameEn": "Queen of Wands", "nameMs": "Ratu Tongkat",
+   "uprightZh": "极具魅力、自信热情，在职场或社交中大放异彩。",
+   "uprightEn": "Highly charismatic, confident, passionate, shining in social or career settings.",
+   "uprightMs": "Sangat berkarisma, yakin, bersemangat, menyerlah dalam kerjaya atau sosial.",
+   "reversedZh": "固执己见、嫉妒心重或专横跋扈惹麻烦。",
+   "reversedEn": "Stubborn, jealous, domineering, causing trouble through emotional outbursts.",
+   "reversedMs": "Keras kepala, cemburu buta, terlalu mengawal dan mencetus masalah."},
+  {"number": "14", "arcana": "小阿尔卡纳", "suit": "权杖", "img": "w14.jpg",
+   "nameZh": "权杖国王", "nameEn": "King of Wands", "nameMs": "Raja Tongkat",
+   "uprightZh": "天生领导者、拥有宏大愿景与非凡魅力。",
+   "uprightEn": "Natural leader, possessing a grand vision and extraordinary charisma.",
+   "uprightMs": "Pemimpin semula jadi, mempunyai visi besar dan karisma luar biasa.",
+   "reversedZh": "独裁专制、冲动傲慢，为达目的不择手段。",
+   "reversedEn": "Dictatorial, impulsive, arrogant, and ruthless in achieving goals.",
+   "reversedMs": "Kuku besi, gopoh, angkuh, dan sanggup lakukan apa saja demi matlamat."},
+
+  // ================= PENTACLES (星币 / Pentakel) =================
+  {"number": "1", "arcana": "小阿尔卡纳", "suit": "星币", "img": "p01.jpg",
+   "nameZh": "星币王牌", "nameEn": "Ace of Pentacles", "nameMs": "As Pentakel",
+   "uprightZh": "财富新起点、实质回报、带来物质繁荣的新机遇。",
+   "uprightEn": "New financial start, tangible rewards, new opportunity for prosperity.",
+   "uprightMs": "Permulaan kewangan baharu, pulangan nyata, peluang kemakmuran.",
+   "reversedZh": "错失良机、财务损失、贪婪或项目缺乏资金。",
+   "reversedEn": "Missed opportunity, financial loss, greed, or lack of funding.",
+   "reversedMs": "Peluang terlepas, kerugian, tamak, atau projek kurang dana."},
+  {"number": "2", "arcana": "小阿尔卡纳", "suit": "星币", "img": "p02.jpg",
+   "nameZh": "星币二", "nameEn": "Two of Pentacles", "nameMs": "Dua Pentakel",
+   "uprightZh": "灵活资金周转、在多任务中保持平衡与适应。",
+   "uprightEn": "Flexible cash flow, balancing multiple tasks, adapting to changes.",
+   "uprightMs": "Aliran tunai fleksibel, mengimbangi pelbagai tugas, mudah menyesuaikan diri.",
+   "reversedZh": "失去平衡、财务危机或过度透支了精力金钱。",
+   "reversedEn": "Loss of balance, financial crisis, overextending energy and money.",
+   "reversedMs": "Hilang keseimbangan, krisis wang, tenaga dan duit terlampau diperah."},
+  {"number": "3", "arcana": "小阿尔卡纳", "suit": "星币", "img": "p03.jpg",
+   "nameZh": "星币三", "nameEn": "Three of Pentacles", "nameMs": "Tiga Pentakel",
+   "uprightZh": "完美团队合作、精湛技艺、获得初步成就。",
+   "uprightEn": "Perfect teamwork, masterful craftsmanship, achieving initial success.",
+   "uprightMs": "Kerjasama pasukan cemerlang, kemahiran tinggi, kejayaan awal dicapai.",
+   "reversedZh": "缺乏协作、技术不精或团队内部出现分歧。",
+   "reversedEn": "Lack of teamwork, poor skills, or internal team disputes.",
+   "reversedMs": "Kurang kerjasama, kurang kemahiran, atau perpecahan dalam pasukan."},
+  {"number": "4", "arcana": "小阿尔卡纳", "suit": "星币", "img": "p04.jpg",
+   "nameZh": "星币四", "nameEn": "Four of Pentacles", "nameMs": "Empat Pentakel",
+   "uprightZh": "保守理财、物质安全感，但需避免过度固执。",
+   "uprightEn": "Conservative finance, material security, but avoid being overly stingy.",
+   "uprightMs": "Berjimat cermat, rasa selamat dengan harta, tapi jangan terlalu kedekut.",
+   "reversedZh": "挥霍无度、放弃控制或学会分享不再守财。",
+   "reversedEn": "Overspending, losing control, or finally learning to share wealth.",
+   "reversedMs": "Boros berbelanja, hilang kawalan, atau mula sudi berkongsi rezeki."},
+  {"number": "5", "arcana": "小阿尔卡纳", "suit": "星币", "img": "p05.jpg",
+   "nameZh": "星币五", "nameEn": "Five of Pentacles", "nameMs": "Lima Pentakel",
+   "uprightZh": "贫困、孤立无援，物质或健康上的困境。",
+   "uprightEn": "Poverty, isolation, feeling abandoned in material or health struggles.",
+   "uprightMs": "Kemiskinan, terpinggir, masalah kesihatan dan kewangan yang mendesak.",
+   "reversedZh": "经济好转、脱离困境、找到援助之手。",
+   "reversedEn": "Financial recovery, escaping hardship, finding a helping hand.",
+   "reversedMs": "Kewangan pulih, keluar dari kesusahan, mendapat bantuan yang dicari."},
+  {"number": "6", "arcana": "小阿尔卡纳", "suit": "星币", "img": "p06.jpg",
+   "nameZh": "星币六", "nameEn": "Six of Pentacles", "nameMs": "Enam Pentakel",
+   "uprightZh": "慷慨、慈善、资源合理分配，收到奖金或帮助。",
+   "uprightEn": "Generosity, charity, fair resource distribution, receiving bonuses or help.",
+   "uprightMs": "Murah hati, amal jariah, agihan adil, menerima bonus atau bantuan.",
+   "reversedZh": "自私、债务纠纷或带附加条件的帮助。",
+   "reversedEn": "Selfishness, debt disputes, or help that comes with strings attached.",
+   "reversedMs": "Mementingkan diri, beban hutang, atau bantuan yang ada udang di sebalik batu."},
+  {"number": "7", "arcana": "小阿尔卡纳", "suit": "星币", "img": "p07.jpg",
+   "nameZh": "星币七", "nameEn": "Seven of Pentacles", "nameMs": "Tujuh Pentakel",
+   "uprightZh": "长远投资、耐心等待收成，评估目前的进度。",
+   "uprightEn": "Long-term investment, patiently waiting for harvest, evaluating progress.",
+   "uprightMs": "Pelaburan jangka panjang, sabar menunggu hasil, menilai kemajuan.",
+   "reversedZh": "缺乏耐心、投资失败、努力未得相应回报。",
+   "reversedEn": "Impatience, failed investments, efforts not yielding adequate returns.",
+   "reversedMs": "Kurang sabar, pelaburan lebur, usaha keras tanpa pulangan setimpal."},
+  {"number": "8", "arcana": "小阿尔卡纳", "suit": "星币", "img": "p08.jpg",
+   "nameZh": "星币八", "nameEn": "Eight of Pentacles", "nameMs": "Lapan Pentakel",
+   "uprightZh": "极度专注、勤奋工作、通过打磨工艺获得提升。",
+   "uprightEn": "Extreme focus, hard work, leveling up through dedicated craftsmanship.",
+   "uprightMs": "Fokus luar biasa, kerja keras, meningkatkan tahap melalui ketekunan.",
+   "reversedZh": "缺乏热情、粗心大意或只看重钱忽略质量。",
+   "reversedEn": "Lack of passion, carelessness, or prioritizing money over quality.",
+   "reversedMs": "Kurang semangat, cuai, atau hanya kejar duit mengabaikan kualiti."},
+  {"number": "9", "arcana": "小阿尔卡纳", "suit": "星币", "img": "p09.jpg",
+   "nameZh": "星币九", "nameEn": "Nine of Pentacles", "nameMs": "Sembilan Pentakel",
+   "uprightZh": "富足、独立自主，享受自己辛勤劳动换来的成果。",
+   "uprightEn": "Abundance, independence, enjoying the fruits of your hard labor.",
+   "uprightMs": "Kewangan kukuh, berdikari, menikmati hasil titik peluh sendiri.",
+   "reversedZh": "过度依赖他人或表面风光背地里牺牲了自由。",
+   "reversedEn": "Overdependence, material lack, or sacrificing freedom for fake wealth.",
+   "reversedMs": "Terlalu bergantung pada orang, atau nampak kaya tapi hilang kebebasan."},
+  {"number": "10", "arcana": "小阿尔卡纳", "suit": "星币", "img": "p10.jpg",
+   "nameZh": "星币十", "nameEn": "Ten of Pentacles", "nameMs": "Sepuluh Pentakel",
+   "uprightZh": "财富传承、家族繁荣、长期财务安全与稳固基础。",
+   "uprightEn": "Generational wealth, family prosperity, long-term financial security.",
+   "uprightMs": "Harta turun-temurun, keluarga makmur, jaminan kewangan jangka panjang.",
+   "reversedZh": "财务纠纷、家庭破裂或投资遭受重大损失。",
+   "reversedEn": "Financial disputes, broken family, or severe investment losses.",
+   "reversedMs": "Pertelingkahan harta, keluarga berpecah, atau kerugian besar pelaburan."},
+  {"number": "11", "arcana": "小阿尔卡纳", "suit": "星币", "img": "p11.jpg",
+   "nameZh": "星币侍从", "nameEn": "Page of Pentacles", "nameMs": "Pengiring Pentakel",
+   "uprightZh": "好学务实、脚踏实地，即将收到关于事业的好消息。",
+   "uprightEn": "Studious, pragmatic, grounded, expecting solid news about career or money.",
+   "uprightMs": "Rajin belajar, pragmatik, bakal terima berita baik tentang kerjaya/kewangan.",
+   "reversedZh": "懒惰、缺乏目标、不切实际或无法集中注意力。",
+   "reversedEn": "Lazy, lacking goals, impractical, or unable to focus on studies.",
+   "reversedMs": "Malas, tiada arah tuju, tidak berpijak di bumi nyata atau hilang fokus."},
+  {"number": "12", "arcana": "小阿尔卡纳", "suit": "星币", "img": "p12.jpg",
+   "nameZh": "星币骑士", "nameEn": "Knight of Pentacles", "nameMs": "Kesatria Pentakel",
+   "uprightZh": "稳重勤奋、绝对可靠，虽缓慢但定会坚持到底。",
+   "uprightEn": "Steady, diligent, absolutely reliable. Slow but guaranteed to finish.",
+   "uprightMs": "Berhemah, rajin, sangat boleh diharap. Biar lambat asalkan siap.",
+   "reversedZh": "极其固执、因循守旧或工作狂导致忽略生活。",
+   "reversedEn": "Extremely stubborn, stuck in a rut, or a workaholic ignoring life.",
+   "reversedMs": "Sangat degil, jumud, atau gila kerja hingga abaikan kehidupan."},
+  {"number": "13", "arcana": "小阿尔卡纳", "suit": "星币", "img": "p13.jpg",
+   "nameZh": "星币王后", "nameEn": "Queen of Pentacles", "nameMs": "Ratu Pentakel",
+   "uprightZh": "丰饶、慷慨贤惠，完美平衡家庭与物质生活。",
+   "uprightEn": "Abundant, generous, nurturing, perfectly balancing family and wealth.",
+   "uprightMs": "Makmur, pemurah, seimbang menguruskan rumah tangga dan kerjaya.",
+   "reversedZh": "贪婪、极度缺乏安全感或忽略家人的感受。",
+   "reversedEn": "Greedy, extremely insecure about money, or neglecting family needs.",
+   "reversedMs": "Tamak, rasa tidak selamat soal wang, atau abaikan kehendak keluarga."},
+  {"number": "14", "arcana": "小阿尔卡纳", "suit": "星币", "img": "p14.jpg",
+   "nameZh": "星币国王", "nameEn": "King of Pentacles", "nameMs": "Raja Pentakel",
+   "uprightZh": "巨大财富、事业巅峰、值得信赖的成功人士。",
+   "uprightEn": "Massive wealth, peak career, a highly reliable and successful figure.",
+   "uprightMs": "Kekayaan luar biasa, puncak kerjaya, individu sukses yang dipercayai.",
+   "reversedZh": "腐败、极端物质主义或为金钱不择手段。",
+   "reversedEn": "Corruption, extreme materialism, or ruthless in the pursuit of wealth.",
+   "reversedMs": "Rasuah, materialistik ekstrem, atau sanggup buat apa saja demi duit."}
 ];
