@@ -17,6 +17,8 @@ dependencies:
   url_launcher: ^6.3.2
   firebase_core: ^4.9.0
   firebase_remote_config: ^6.5.1
+  audioplayers: ^5.0.0
+  google_fonts: ^6.0.0
 
 dev_dependencies:
   flutter_test:
@@ -28,3 +30,4 @@ flutter:
   # 这里是我们配置的本地图片路径
   assets:
     - assets/images/
+    - assets/audio/
