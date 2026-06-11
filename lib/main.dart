@@ -1817,7 +1817,8 @@ class _ReadingScreenState extends State<ReadingScreen> with TickerProviderStateM
     "(Explain each card's role in the spread and how they connect to each other. Use bullet points if helpful. For each card, mention its meaning in this position and how it affects the question. Avoid listing keywords only; connect it to the user's topic: ${widget.topic.text(widget.lang)})\n\n" +
     "### 💡 What should I actually do?\n" +
     "(Give 2-3 concrete, actionable steps. For example: 'This week, try writing down your fears.' or 'Have an honest conversation with your partner.' Avoid generic advice like 'trust the universe' without practical steps.)\n\n" +
-    "Remember: use everyday language, be warm, and always tie your reading back to the user's question.";
+    "Remember: use everyday language, be warm, and always tie your reading back to the user's question."
+    "Do NOT use tables. Use clear paragraphs, bullet points, or bold headings to explain each card. Tables look terrible on mobile screens.";
     } else if (widget.lang == AppLanguage.ms) {
       prompt += "\nAnda adalah pembaca tarot yang baik hati dan membumi. Elakkan bahasa mistik yang kabur. Gunakan kata-kata yang ringkas, jelas, dan praktikal. Bercakaplah seperti rakan bijak yang memberi nasihat.\n\n" +
     "Susun jawapan anda dengan Markdown seperti berikut:\n\n" +
@@ -1827,7 +1828,8 @@ class _ReadingScreenState extends State<ReadingScreen> with TickerProviderStateM
     "(Terangkan peranan setiap kad dalam susunan dan bagaimana ia berhubung antara satu sama lain. Gunakan poin bullet jika membantu. Bagi setiap kad, sebut maknanya di posisi ini dan bagaimana ia mempengaruhi soalan anda tentang: ${widget.topic.text(widget.lang)})\n\n" +
     "### 💡 Apakah yang perlu saya lakukan sebenarnya?\n" +
     "(Berikan 2-3 langkah konkrit yang boleh diambil. Contoh: 'Minggu ini, cuba tulis ketakutan anda.' atau 'Adakan perbualan jujur dengan pasangan anda.' Elakkan nasihat umum seperti 'percayakan alam semesta' tanpa langkah praktikal.)\n\n" +
-    "Ingat: gunakan bahasa harian, mesra, dan sentiasa kaitkan bacaan dengan soalan pengguna.";
+    "Ingat: gunakan bahasa harian, mesra, dan sentiasa kaitkan bacaan dengan soalan pengguna."
+    "JANGAN gunakan jadual. Gunakan perenggan yang jelas, poin bullet, atau tajuk tebal untuk menerangkan setiap kad. Jadual kelihatan buruk pada skrin telefon.";
     } else {
       prompt += "\n你是一位亲切、接地气的塔罗解读师。请避免使用玄奥难懂的语言，用简单、清晰、生活化的词汇来表达。像一位明智的朋友在给你建议。\n\n" +
     "请按以下 Markdown 结构回答：\n\n" +
@@ -1837,7 +1839,8 @@ class _ReadingScreenState extends State<ReadingScreen> with TickerProviderStateM
     "（解释每张牌在阵中的角色和它们如何相互影响。可以用项目符号。对每张牌，说明它在这个位置的含义，以及它对你所问的【${widget.topic.text(widget.lang)}】有何影响。不要只列关键词，要联系实际问题。）\n\n" +
     "### 💡 我该具体怎么做？\n" +
     "（给出 2-3 条马上能做的事情。例如：「本周试着把自己的恐惧写下来」「和伴侣坦诚地聊一次」。避免只说「相信宇宙」这种空洞的建议。）\n\n" +
-    "记住：用生活化的语言，语气温暖，始终把解读和用户的问题联系起来。";
+    "记住：用生活化的语言，语气温暖，始终把解读和用户的问题联系起来。"
+    "禁止使用表格。请用清晰的段落、项目符号或加粗标题来解释每张牌。表格在手机竖屏上排版非常难看。";
     }
 
     try {
