@@ -47,7 +47,7 @@ module.exports = async function handler(req, res) {
         body: JSON.stringify({
           // 🔄 自动降级队列：按首选顺序排列。前一个触发限流或下线时，OpenRouter 会直接切到下一个。
           models: [
-            "inclusionai/ring-2.6-1t:free",
+            "nvidia/nemotron-3-ultra-550b-a55b:free",
             "z-ai/glm-4.5-air:free",
             "poolside/laguna-m.1:free"
           ],
