@@ -1,5 +1,6 @@
 {
-  "buildCommand": "flutter build web",
+  "installCommand": "if [ ! -d \"flutter\" ]; then git clone https://github.com/flutter/flutter.git -b stable --depth 1; fi && export PATH=\"$PATH:`pwd`/flutter/bin\" && flutter precache && flutter pub get",
+  "buildCommand": "export PATH=\"$PATH:`pwd`/flutter/bin\" && flutter build web",
   "outputDirectory": "build/web",
   "rewrites": [
     { "source": "/(.*)", "destination": "/index.html" }
