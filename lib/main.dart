@@ -1663,11 +1663,19 @@ class _TypewriterTextState extends State<TypewriterText> {
     _timer?.cancel();
     super.dispose();
   }
-  @override Widget build(BuildContext context) {
+  @override
+  Widget build(BuildContext context) {
     return MarkdownBody(
       data: _displayed,
       styleSheet: widget.styleSheet ?? MarkdownStyleSheet(
-        p: widget.style ?? const TextStyle(fontSize: 15, height: 1.8, color: Colors.white70, letterSpacing: 0.5),
+        p: widget.style ?? const TextStyle(
+          fontSize: 15,
+          height: 1.8,
+          color: Colors.white,          // 改为纯白
+          fontWeight: FontWeight.w500,   // 适当加粗
+          letterSpacing: 0.5,
+          shadows: [Shadow(color: Colors.black26, blurRadius: 2, offset: Offset(0, 1))],
+        ),
         pPadding: const EdgeInsets.only(bottom: 12),
         strong: const TextStyle(color: AppColors.gold, fontWeight: FontWeight.bold),
         h1: const TextStyle(color: AppColors.gold, fontSize: 24, fontWeight: FontWeight.bold),
