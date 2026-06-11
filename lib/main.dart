@@ -1952,9 +1952,17 @@ class _ReadingScreenState extends State<ReadingScreen> with TickerProviderStateM
   }
   
   String _getTip(AppLanguage lang, int index) {
-    if (lang == AppLanguage.en) return tipsEn[index % tipsEn.length];
-    if (lang == AppLanguage.ms) return tipsMs[index % tipsMs.length];
-    return tipsZh[index % tipsZh.length];
+    String tip;
+    if (lang == AppLanguage.en) {
+      tip = tipsEn[index % tipsEn.length];
+      return "Tarot Tip: $tip";
+    } else if (lang == AppLanguage.ms) {
+      tip = tipsMs[index % tipsMs.length];
+      return "Petua Tarot: $tip";
+    } else {
+      tip = tipsZh[index % tipsZh.length];
+      return "塔罗小提示：$tip";
+    }
   }
 
   Future<void> _saveToHistory() async {
@@ -1984,11 +1992,7 @@ class _ReadingScreenState extends State<ReadingScreen> with TickerProviderStateM
       _isError = false; 
       // 开启随机冷知识轮播定时器
       _currentTipIndex = Random().nextInt(tipsZh.length);
-      aiResponse = widget.lang == AppLanguage.en
-        ? "🔮 Connecting to the oracle, your tarot master is preparing the reading...\n\n"
-        : widget.lang == AppLanguage.ms 
-        ? "🔮 Menyambung ke alam ramalan, pakar tarot anda sedang menyediakan bacaan...\n\n"
-        : "🔮 灵界连结中，占卜师正在为你综合解读...\n\n";
+      aiResponse = "";
     });
     
     _loadingTextTimer?.cancel();
@@ -2328,7 +2332,7 @@ class _ReadingScreenState extends State<ReadingScreen> with TickerProviderStateM
                               widget.lang == AppLanguage.en ? 'Master is writing your reading...' : widget.lang == AppLanguage.ms ? 'Pakar sedang menulis bacaan anda...' : '大师正在撰写指引报告...',
                               style: const TextStyle(color: AppColors.gold, fontSize: 16, shadows: [Shadow(color: AppColors.goldGlow, blurRadius: 8)]),
                             ),
-                            const SizedBox(height: 15),
+                            const SizedBox(height: 20),
                             
                             // 带动画切换的塔罗小知识
                             AnimatedSwitcher(
@@ -2340,9 +2344,6 @@ class _ReadingScreenState extends State<ReadingScreen> with TickerProviderStateM
                                 textAlign: TextAlign.center,
                               ),
                             ),
-                            
-                            const SizedBox(height: 10),
-                            _buildTypewriterText(),
                           ],
                         ),
                       )
