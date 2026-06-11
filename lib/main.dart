@@ -1287,7 +1287,7 @@ class _TarotCardWidgetState extends State<TarotCardWidget> with TickerProviderSt
     
     _glowBurstController = AnimationController(vsync: this, duration: const Duration(milliseconds: 800));
     _glowBurstAnimation = Tween<double>(begin: 0.0, end: 1.0).animate(CurvedAnimation(parent: _glowBurstController, curve: Curves.easeOut));
-    _backGlowController = AnimationController(vsync: this, duration: const Duration(seconds: 7))..repeat();
+    _backGlowController = AnimationController(vsync: this, duration: const Duration(seconds: 10))..repeat();
   }
 
   void _flipCard() {
