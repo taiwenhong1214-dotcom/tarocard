@@ -57,7 +57,6 @@ class DefaultFirebaseOptions {
     projectId: 'tai-taro-card',
     storageBucket: 'tai-taro-card.firebasestorage.app',
   );
-
   static const FirebaseOptions ios = FirebaseOptions(
     apiKey: 'AIzaSyCWY6nhQyCfVklv7pq-8d_QscrGn08nVOU',
     appId: '1:366428734957:ios:2c10c08ad06d089a7fd3e4',
@@ -66,7 +65,6 @@ class DefaultFirebaseOptions {
     storageBucket: 'tai-taro-card.firebasestorage.app',
     iosBundleId: 'com.example.taroCard',
   );
-
   static const FirebaseOptions macos = FirebaseOptions(
     apiKey: 'AIzaSyCWY6nhQyCfVklv7pq-8d_QscrGn08nVOU',
     appId: '1:366428734957:ios:2c10c08ad06d089a7fd3e4',
