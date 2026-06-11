@@ -54,7 +54,8 @@ module.exports = async function handler(req, res) {
           messages: [
             { role: "user", content: prompt }
           ],
-          temperature: 0.7 
+          temperature: 0.7,
+          max_tokens: 2048 
         })
       }
     );
