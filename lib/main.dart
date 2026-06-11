@@ -1832,7 +1832,7 @@ class _ReadingScreenState extends State<ReadingScreen> with TickerProviderStateM
       final response = await http.post(
         Uri.parse(_proxyUrl),
         headers: {'Content-Type': 'application/json', 'x-app-version': '2.1.0'},
-        body: jsonEncode({"prompt": prompt}),
+        body: jsonEncode({"prompt": prompt, "max_tokens": 2048}),
       );
       
       if (!mounted) return;
