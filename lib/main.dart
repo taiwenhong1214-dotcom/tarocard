@@ -9,10 +9,46 @@ import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_remote_config/firebase_remote_config.dart';
 import 'package:audioplayers/audioplayers.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:hive/hive.dart';
+import 'package:hive_flutter/hive_flutter.dart';
 import 'firebase_options.dart';
+
+// ================= 全局色彩美学配置 (Midnight & Ethereal Gold) =================
+class AppColors {
+  // 核心主色
+  static const Color gold = Color(0xFFE8C37C);           // 塔罗奢华暗金
+  static const Color mysticPurple = Color(0xFF9E7BFF);   // 灵境神秘紫
+  static const Color cyanGlow = Color(0xFF4DEEEA);       // 幽魂青绿（点缀）
+  
+  // 透明度衍生色
+  static const Color goldDim = Color.fromARGB(153, 158, 91, 185);        // 60% 金
+  static const Color goldGlow = Color.fromARGB(102, 205, 124, 232);       // 40% 金
+  static const Color mysticPurpleDim = Color(0x809E7BFF);// 50% 紫
+  
+  // 深空背景
+  static const Color bgTop = Color.fromARGB(34, 103, 83, 138);          // 穹顶午夜靛蓝
+  static const Color bgBottom = Color(0xFF030206);       // 深渊虚无黑
+  
+  // 玻璃拟态
+  static const Color glassBg = Color.fromARGB(160, 80, 50, 110);        // 幽邃紫透底
+  static const Color glassBorder = Color.fromARGB(77, 212, 124, 232);    // 30% 金色细边
+  
+  // 卡牌色系
+  static const Color cardBackDark = Color.fromARGB(255, 33, 25, 67);   // 牌背深渊色
+  static const Color cardBackLight = Color.fromARGB(255, 157, 7, 171);  // 牌背紫光色
+
+  static const Color pink = Color.fromARGB(134, 150, 1, 150);
+  static const Color selectedTile = Color(0xFFE040FB); 
+}
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  
+  // 初始化 Hive 本地数据库
+  await Hive.initFlutter();
+  Hive.registerAdapter(ReadingRecordAdapter());
+  await Hive.openBox<ReadingRecord>('reading_history');
+
   try {
     await Firebase.initializeApp(
       options: DefaultFirebaseOptions.currentPlatform,
@@ -56,32 +92,37 @@ class AudioManager {
   }
 }
 
-// ================= 升级版粒子背景 (带流星拖尾) =================
+// ================= 升级版粒子背景 =================
 class ParticleBackgroundPainter extends CustomPainter {
   final double time;
   ParticleBackgroundPainter(this.time);
   final _rand = Random(42);
   List<_Particle>? _particles;
+  
   void _initOnce(Size size) {
     _particles = List.generate(50, (i) {
       return _Particle(
         x: _rand.nextDouble() * size.width,
         y: _rand.nextDouble() * size.height,
-        radius: _rand.nextDouble() * 3 + 1,
+        radius: _rand.nextDouble() * 2.5 + 0.5,
         speedX: (_rand.nextDouble() - 0.5) * 0.8,
         speedY: (_rand.nextDouble() - 0.5) * 0.8,
-        opacity: _rand.nextDouble() * 0.6 + 0.2,
-        trailLength: _rand.nextDouble() * 30 + 10,
+        opacity: _rand.nextDouble() * 0.6 + 0.1,
+        trailLength: _rand.nextDouble() * 20 + 10,
       );
     });
   }
+  
   @override
   void paint(Canvas canvas, Size size) {
+    if (size.width <= 0 || size.height <= 0) return;
+
     _particles ?? _initOnce(size);
     final paint = Paint()..style = PaintingStyle.fill;
     final trailPaint = Paint()
       ..style = PaintingStyle.fill
       ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 3);
+      
     for (var p in _particles!) {
       double dx = p.x + p.speedX * time * 20;
       double dy = p.y + p.speedY * time * 20;
@@ -89,9 +130,12 @@ class ParticleBackgroundPainter extends CustomPainter {
       dy = dy % size.height;
       if (dx < 0) dx += size.width;
       if (dy < 0) dy += size.height;
-      // 拖尾
-      trailPaint.color = Color.fromRGBO(255, 215, 0, (p.opacity * 0.3 * (0.7 + 0.3 * sin(time + p.x))).clamp(0.0, 1.0));
-      paint.color = Color.fromRGBO(255, 215, 0, (p.opacity * (0.8 + 0.2 * sin(time + p.x))).clamp(0.0, 1.0));
+      
+      trailPaint.color = Color.fromRGBO(158, 123, 255, (p.opacity * 0.3 * (0.7 + 0.3 * sin(time + p.x))).clamp(0.0, 1.0));
+      paint.color = Color.fromRGBO(232, 195, 124, (p.opacity * (0.8 + 0.2 * sin(time + p.x))).clamp(0.0, 1.0));
+      
+      canvas.drawCircle(Offset(dx, dy), p.radius * 1.5, trailPaint);
+      canvas.drawCircle(Offset(dx, dy), p.radius, paint);
     }
   }
   @override
@@ -113,12 +157,15 @@ class LightThreadsPainter extends CustomPainter {
   LightThreadsPainter(this.time);
   @override
   void paint(Canvas canvas, Size size) {
+    if (size.width <= 0 || size.height <= 0) return;
+
     final paint = Paint()
-      ..color = const Color.fromRGBO(155, 89, 182, 0.15) 
-      ..strokeWidth = 1.5
+      ..color = AppColors.mysticPurple.withOpacity(0.12) 
+      ..strokeWidth = 1.2
       ..style = PaintingStyle.stroke;
     final path = Path();
     final w = size.width, h = size.height;
+    
     for (int i = 0; i < 4; i++) {
       final shift = sin(time * 0.5 + i) * 60;
       path.reset();
@@ -135,19 +182,19 @@ class LightThreadsPainter extends CustomPainter {
       path.quadraticBezierTo(w * 0.7, h * 0.2 + shift, w + 20, h * 0.0);
       canvas.drawPath(path, paint);
     }
-    // 缓慢旋转的魔法阵 (中心透明圆环)
+    
     canvas.save();
     canvas.translate(w / 2, h / 2);
-    canvas.rotate(time * 0.2);
+    canvas.rotate(time * 0.15);
     final circlePaint = Paint()
-      ..color = const Color.fromRGBO(201, 168, 76, 0.08) 
+      ..color = AppColors.gold.withOpacity(0.06) 
       ..style = PaintingStyle.stroke
-      ..strokeWidth = 2;
+      ..strokeWidth = 1.5;
     canvas.drawCircle(Offset.zero, w * 0.6, circlePaint);
     canvas.drawCircle(Offset.zero, w * 0.55, circlePaint);
-    // 六芒星简化
+    
     final starPaint = Paint()
-      ..color = const Color.fromRGBO(201, 168, 76, 0.1) 
+      ..color = AppColors.gold.withOpacity(0.08) 
       ..style = PaintingStyle.stroke
       ..strokeWidth = 1;
     for (int i = 0; i < 6; i++) {
@@ -162,7 +209,6 @@ class LightThreadsPainter extends CustomPainter {
   bool shouldRepaint(covariant LightThreadsPainter oldDelegate) => oldDelegate.time != time;
 }
 
-// ================= 背景动画包装器 =================
 class AnimatedBackground extends StatefulWidget {
   final Widget child;
   const AnimatedBackground({Key? key, required this.child}) : super(key: key);
@@ -193,26 +239,24 @@ class _AnimatedBackgroundState extends State<AnimatedBackground> with SingleTick
         final t = _bgController.value * 30;
         return Stack(
           children: [
-            Container(
-              decoration: const BoxDecoration(
-                gradient: RadialGradient(
-                  center: Alignment(0.0, -0.3),
-                  radius: 1.5,
-                  colors: [
-                    Color(0x25C9A84C),
-                    Color(0x0A0A0A14),
-                    Colors.transparent,
-                  ],
-                  stops: [0.0, 0.6, 1.0],
+            Positioned.fill(
+              child: Container(
+                decoration: const BoxDecoration(
+                  gradient: RadialGradient(
+                    center: Alignment(0.0, -0.4),
+                    radius: 1.6,
+                    colors: [
+                      Color.fromARGB(51, 128, 111, 171),
+                      Color.fromARGB(17, 42, 31, 70),
+                      Color.fromARGB(0, 40, 40, 40),
+                    ],
+                    stops: [0.0, 0.5, 1.0],
+                  ),
                 ),
               ),
             ),
-            CustomPaint(
-              painter: ParticleBackgroundPainter(t),
-            ),
-            CustomPaint(
-              painter: LightThreadsPainter(t),
-            ),
+            Positioned.fill(child: CustomPaint(painter: ParticleBackgroundPainter(t))),
+            Positioned.fill(child: CustomPaint(painter: LightThreadsPainter(t))),
             widget.child,
           ],
         );
@@ -229,11 +273,11 @@ Route _createRoute(Widget page, {bool scale = false}) {
       transitionsBuilder: (context, animation, secondaryAnimation, child) {
         final curve = CurvedAnimation(parent: animation, curve: Curves.easeInOutCubic);
         return ScaleTransition(
-          scale: Tween<double>(begin: 0.8, end: 1.0).animate(curve),
+          scale: Tween<double>(begin: 0.85, end: 1.0).animate(curve),
           child: FadeTransition(opacity: animation, child: child),
         );
       },
-      transitionDuration: const Duration(milliseconds: 600),
+      transitionDuration: const Duration(milliseconds: 500),
     );
   } else {
     return PageRouteBuilder(
@@ -241,11 +285,11 @@ Route _createRoute(Widget page, {bool scale = false}) {
       transitionsBuilder: (context, animation, secondaryAnimation, child) {
         final curve = CurvedAnimation(parent: animation, curve: Curves.easeOutCubic);
         return SlideTransition(
-          position: Tween<Offset>(begin: const Offset(0, 0.15), end: Offset.zero).animate(curve),
+          position: Tween<Offset>(begin: const Offset(0, 0.1), end: Offset.zero).animate(curve),
           child: FadeTransition(opacity: animation, child: child),
         );
       },
-      transitionDuration: const Duration(milliseconds: 600),
+      transitionDuration: const Duration(milliseconds: 500),
     );
   }
 }
@@ -259,40 +303,38 @@ class TarotApp extends StatelessWidget {
       title: '塔罗-灵境 Tarot',
       theme: ThemeData(
         brightness: Brightness.dark,
-        primaryColor: const Color(0xFFC9A84C),
-        scaffoldBackgroundColor: const Color(0xFF0A0A14),
+        primaryColor: const Color.fromARGB(255, 232, 124, 207),
+        scaffoldBackgroundColor: Colors.transparent, 
         fontFamily: GoogleFonts.notoSerifSc().fontFamily,
         appBarTheme: AppBarTheme(
           backgroundColor: Colors.transparent,
           elevation: 0,
           centerTitle: true,
           titleTextStyle: GoogleFonts.notoSerifSc(
-            color: const Color(0xFFC9A84C),
+            color: AppColors.gold,
             fontSize: 22,
             fontWeight: FontWeight.w600,
             letterSpacing: 2,
             shadows: const [
-              Shadow(
-                color: Color(0xFFC9A84C),
-                blurRadius: 8,
-              ),
+              Shadow(color: AppColors.goldGlow, blurRadius: 10),
             ],
           ),
-          iconTheme: const IconThemeData(color: Color(0xFFC9A84C)),
+          iconTheme: const IconThemeData(color: AppColors.gold),
         ),
         textTheme: TextTheme(
-          bodyLarge: GoogleFonts.notoSerifSc(color: Colors.white70, fontSize: 16, shadows: const [
-            Shadow(color: Colors.black45, blurRadius: 3),
-          ]),
+          bodyLarge: GoogleFonts.notoSerifSc(color: Colors.white70, fontSize: 16),
           bodyMedium: GoogleFonts.notoSerifSc(color: Colors.white60, fontSize: 14),
         ),
-        cardColor: const Color(0xFF1A1A2E),
-        dialogBackgroundColor: const Color(0xFF1E1E2A),
+        cardColor: const Color(0xFF161026),
+        dialogBackgroundColor: const Color(0xFF1A132F),
       ),
       home: const HomeScreen(),
       debugShowCheckedModeBanner: false,
       builder: (context, child) {
-        return AnimatedBackground(child: child!);
+        return Scaffold(
+          backgroundColor: AppColors.bgBottom,
+          body: AnimatedBackground(child: child!),
+        );
       },
     );
   }
@@ -310,40 +352,18 @@ String tr(AppLanguage lang, String zh, String en, String ms) {
 // ================= 数据模型与四大经典牌阵配置 =================
 
 class SpreadConfig {
-  final String nameZh;
-  final String nameEn;
-  final String nameMs;
-  final List<String> positionsZh;
-  final List<String> positionsEn;
-  final List<String> positionsMs;
-  final String descriptionZh;
-  final String descriptionEn;
-  final String descriptionMs;
+  final String nameZh, nameEn, nameMs;
+  final List<String> positionsZh, positionsEn, positionsMs;
+  final String descriptionZh, descriptionEn, descriptionMs;
 
   SpreadConfig({
-    required this.nameZh,
-    required this.nameEn,
-    required this.nameMs,
-    required this.positionsZh,
-    required this.positionsEn,
-    required this.positionsMs,
-    required this.descriptionZh,
-    required this.descriptionEn,
-    required this.descriptionMs,
+    required this.nameZh, required this.nameEn, required this.nameMs,
+    required this.positionsZh, required this.positionsEn, required this.positionsMs,
+    required this.descriptionZh, required this.descriptionEn, required this.descriptionMs,
   });
 
-  String name(AppLanguage lang) {
-    if (lang == AppLanguage.en) return nameEn;
-    if (lang == AppLanguage.ms) return nameMs;
-    return nameZh;
-  }
-  
-  String description(AppLanguage lang) {
-    if (lang == AppLanguage.en) return descriptionEn;
-    if (lang == AppLanguage.ms) return descriptionMs;
-    return descriptionZh;
-  }
-  
+  String name(AppLanguage lang) => tr(lang, nameZh, nameEn, nameMs);
+  String description(AppLanguage lang) => tr(lang, descriptionZh, descriptionEn, descriptionMs);
   List<String> positions(AppLanguage lang) {
     if (lang == AppLanguage.en) return positionsEn;
     if (lang == AppLanguage.ms) return positionsMs;
@@ -352,22 +372,14 @@ class SpreadConfig {
 }
 
 class Topic {
-  final String zh;
-  final String en;
-  final String ms;
+  final String zh, en, ms;
   const Topic({required this.zh, required this.en, required this.ms});
-  String text(AppLanguage lang) {
-    if (lang == AppLanguage.en) return en;
-    if (lang == AppLanguage.ms) return ms;
-    return zh;
-  }
+  String text(AppLanguage lang) => tr(lang, zh, en, ms);
 }
 
 final List<SpreadConfig> availableSpreads = [
   SpreadConfig(
-    nameZh: '圣三角牌阵 (3张)',
-    nameEn: 'Holy Triangle Spread (3 cards)',
-    nameMs: 'Susunan Segitiga Suci (3 kad)',
+    nameZh: '圣三角牌阵 (3张)', nameEn: 'Holy Triangle Spread (3 cards)', nameMs: 'Susunan Segitiga Suci (3 kad)',
     descriptionZh: '最经典的入门牌阵，呈倒三角排列。适合每日运势或快速提问。',
     descriptionEn: 'A classic beginner spread in an inverted triangle. Best for daily fortune or quick questions.',
     descriptionMs: 'Susunan klasik untuk pemula dalam bentuk segitiga terbalik. Sesuai untuk nasib harian atau soalan pantas.',
@@ -376,9 +388,7 @@ final List<SpreadConfig> availableSpreads = [
     positionsMs: ['Sedar / Situasi Luaran', 'Bawah Sedar / Halangan Tersembunyi', 'Titik Kejayaan / Nasihat Utama'],
   ),
   SpreadConfig(
-    nameZh: '大十字展开法 (5张)',
-    nameEn: 'Grand Cross Layout (5 cards)',
-    nameMs: 'Susunan Salib Besar (5 kad)',
+    nameZh: '大十字展开法 (5张)', nameEn: 'Grand Cross Layout (5 cards)', nameMs: 'Susunan Salib Besar (5 kad)',
     descriptionZh: '呈完美的十字形状，剖析特定事件的核心、阻力、助力及深层原因。',
     descriptionEn: 'A perfect cross layout that reveals the core, resistance, support and deep roots of a specific event.',
     descriptionMs: 'Susunan salib yang sempurna yang mendedahkan inti, rintangan, sokongan dan akar mendalam peristiwa tertentu.',
@@ -387,9 +397,7 @@ final List<SpreadConfig> availableSpreads = [
     positionsMs: ['Hasil', 'Sokongan Luaran / Bantuan', 'Halangan Luaran / Cabaran', 'Punca / Akar Mental', 'Penyelesaian Utama / Strategi Teras'],
   ),
   SpreadConfig(
-    nameZh: '二择一展开法 (5张)',
-    nameEn: 'Choice Spread (5 cards)',
-    nameMs: 'Susunan Pilihan (5 kad)',
+    nameZh: '二择一展开法 (5张)', nameEn: 'Choice Spread (5 cards)', nameMs: 'Susunan Pilihan (5 kad)',
     descriptionZh: '呈 Y 字形分支，面临抉择时专门针对“做决定”设计的牌阵。',
     descriptionEn: 'A Y-shaped spread crafted for decision-making questions and evaluating two options.',
     descriptionMs: 'Susunan berbentuk Y yang direka untuk soalan membuat keputusan dan menilai dua pilihan.',
@@ -398,27 +406,13 @@ final List<SpreadConfig> availableSpreads = [
     positionsMs: ['Situasi Penanya', 'Laluan Semasa Pilihan A', 'Laluan Semasa Pilihan B', 'Hasil Pilihan A', 'Hasil Pilihan B'],
   ),
   SpreadConfig(
-    nameZh: '凯尔特十字 (10张)',
-    nameEn: 'Celtic Cross (10 cards)',
-    nameMs: 'Salib Celtic (10 kad)',
+    nameZh: '凯尔特十字 (10张)', nameEn: 'Celtic Cross (10 cards)', nameMs: 'Salib Celtic (10 kad)',
     descriptionZh: '最经典的塔罗牌阵，包含中央十字与右侧立柱。全方位深度剖析复杂问题。',
     descriptionEn: 'The classic Celtic Cross with a central cross and right-side pillar for deep analysis of complex issues.',
     descriptionMs: 'Salib Celtic klasik dengan salib di tengah dan tiang di sebelah kanan untuk analisis mendalam isu yang kompleks.',
-    positionsZh: [
-      '当前现状', '面临的障碍(横放)', '潜意识 / 现实基础', '过去的影响',
-      '显意识 / 理想目标', '不久的未来', 
-      '当事人状态', '环境/他人影响', '希望与恐惧', '最终结果' 
-    ],
-    positionsEn: [
-      'Current Situation', 'Obstacle (Crossed)', 'Subconscious / Foundation', 'Past Influence',
-      'Conscious / Ideal Goal', 'Near Future',
-      'Self State', 'Environment / External Influence', 'Hopes & Fears', 'Final Outcome'
-    ],
-    positionsMs: [
-      'Situasi Semasa', 'Halangan (Menyilang)', 'Bawah Sedar / Asas', 'Pengaruh Masa Lalu',
-      'Sedar / Matlamat Ideal', 'Masa Depan Terdekat',
-      'Keadaan Diri', 'Persekitaran / Pengaruh Luaran', 'Harapan & Ketakutan', 'Hasil Akhir'
-    ],
+    positionsZh: ['当前现状', '面临的障碍(横放)', '潜意识 / 现实基础', '过去的影响', '显意识 / 理想目标', '不久的未来', '当事人状态', '环境/他人影响', '希望与恐惧', '最终结果'],
+    positionsEn: ['Current Situation', 'Obstacle (Crossed)', 'Subconscious / Foundation', 'Past Influence', 'Conscious / Ideal Goal', 'Near Future', 'Self State', 'Environment / External Influence', 'Hopes & Fears', 'Final Outcome'],
+    positionsMs: ['Situasi Semasa', 'Halangan (Menyilang)', 'Bawah Sedar / Asas', 'Pengaruh Masa Lalu', 'Sedar / Matlamat Ideal', 'Masa Depan Terdekat', 'Keadaan Diri', 'Persekitaran / Pengaruh Luaran', 'Harapan & Ketakutan', 'Hasil Akhir'],
   ),
 ];
 
@@ -431,19 +425,8 @@ final List<Topic> availableTopics = const [
 ];
 
 class TarotCard {
-  final String nameZh;
-  final String nameEn;
-  final String nameMs;
-  final String number;
-  final String arcana;
+  final String nameZh, nameEn, nameMs, number, arcana, img, uprightZh, uprightEn, uprightMs, reversedZh, reversedEn, reversedMs;
   final String? suit;
-  final String img;
-  final String uprightZh;
-  final String uprightEn;
-  final String uprightMs;
-  final String reversedZh;
-  final String reversedEn;
-  final String reversedMs;
 
   TarotCard({
     required this.nameZh, required this.nameEn, required this.nameMs,
@@ -452,23 +435,9 @@ class TarotCard {
     required this.reversedZh, required this.reversedEn, required this.reversedMs,
   });
 
-  String name(AppLanguage lang) {
-    if (lang == AppLanguage.en) return nameEn;
-    if (lang == AppLanguage.ms) return nameMs;
-    return nameZh;
-  }
-
-  String uprightMeaning(AppLanguage lang) {
-    if (lang == AppLanguage.en) return uprightEn;
-    if (lang == AppLanguage.ms) return uprightMs;
-    return uprightZh;
-  }
-
-  String reversedMeaning(AppLanguage lang) {
-    if (lang == AppLanguage.en) return reversedEn;
-    if (lang == AppLanguage.ms) return reversedMs;
-    return reversedZh;
-  }
+  String name(AppLanguage lang) => tr(lang, nameZh, nameEn, nameMs);
+  String uprightMeaning(AppLanguage lang) => tr(lang, uprightZh, uprightEn, uprightMs);
+  String reversedMeaning(AppLanguage lang) => tr(lang, reversedZh, reversedEn, reversedMs);
 }
 
 class DrawnCard {
@@ -478,51 +447,128 @@ class DrawnCard {
   DrawnCard({required this.card, required this.isReversed, required this.positionMeaning});
 }
 
+// 占位模拟数据注入点
 final List<TarotCard> tarotDeck = rawTarotData.map((data) {
   return TarotCard(
-    nameZh: data['nameZh'] ?? "",
-    nameEn: data['nameEn'] ?? "",
-    nameMs: data['nameMs'] ?? "",
-    number: data['number'] ?? "",
-    arcana: data['arcana'] ?? "",
-    suit: data['suit'],
+    nameZh: data['nameZh'] ?? "", nameEn: data['nameEn'] ?? "", nameMs: data['nameMs'] ?? "",
+    number: data['number'] ?? "", arcana: data['arcana'] ?? "", suit: data['suit'],
     img: data['img'] ?? "",
-    uprightZh: data['uprightZh'] ?? "解析加载中...",
-    uprightEn: data['uprightEn'] ?? "Meaning loading...",
-    uprightMs: data['uprightMs'] ?? "Maksud sedang dimuatkan...",
-    reversedZh: data['reversedZh'] ?? "解析加载中...",
-    reversedEn: data['reversedEn'] ?? "Meaning loading...",
-    reversedMs: data['reversedMs'] ?? "Maksud sedang dimuatkan...",
+    uprightZh: data['uprightZh'] ?? "解析加载中...", uprightEn: data['uprightEn'] ?? "Meaning loading...", uprightMs: data['uprightMs'] ?? "Maksud sedang dimuatkan...",
+    reversedZh: data['reversedZh'] ?? "解析加载中...", reversedEn: data['reversedEn'] ?? "Meaning loading...", reversedMs: data['reversedMs'] ?? "Maksud sedang dimuatkan...",
   );
 }).toList();
 
-// ================= 玻璃拟态卡片装饰 =================
-BoxDecoration glassDecoration({Color? borderColor, double borderRadius = 16}) {
+// ================= Hive 历史记录模型与序列化 =================
+class ReadingRecord {
+  final String id;
+  final int timestamp;
+  final String topicZh;
+  final String spreadZh;
+  final String cardsJson;
+  final String aiResponse;
+  final int langIndex;
+
+  ReadingRecord({
+    required this.id, required this.timestamp, required this.topicZh,
+    required this.spreadZh, required this.cardsJson, required this.aiResponse,
+    required this.langIndex,
+  });
+}
+
+class ReadingRecordAdapter extends TypeAdapter<ReadingRecord> {
+  @override
+  final int typeId = 0;
+
+  @override
+  ReadingRecord read(BinaryReader reader) {
+    return ReadingRecord(
+      id: reader.readString(),
+      timestamp: reader.readInt(),
+      topicZh: reader.readString(),
+      spreadZh: reader.readString(),
+      cardsJson: reader.readString(),
+      aiResponse: reader.readString(),
+      langIndex: reader.readInt(),
+    );
+  }
+
+  @override
+  void write(BinaryWriter writer, ReadingRecord obj) {
+    writer.writeString(obj.id);
+    writer.writeInt(obj.timestamp);
+    writer.writeString(obj.topicZh);
+    writer.writeString(obj.spreadZh);
+    writer.writeString(obj.cardsJson);
+    writer.writeString(obj.aiResponse);
+    writer.writeInt(obj.langIndex);
+  }
+}
+
+String cardsToJson(List<DrawnCard> cards) {
+  List<Map<String, dynamic>> list = cards.map((c) => {
+    'cardZh': c.card.nameZh,
+    'isReversed': c.isReversed,
+    'positionMeaning': c.positionMeaning,
+  }).toList();
+  return jsonEncode(list);
+}
+
+List<DrawnCard> cardsFromJson(String jsonStr) {
+  try {
+    List<dynamic> list = jsonDecode(jsonStr);
+    return list.map((item) {
+      final cardZh = item['cardZh'];
+      final card = tarotDeck.firstWhere((c) => c.nameZh == cardZh, orElse: () => tarotDeck[0]);
+      return DrawnCard(
+        card: card,
+        isReversed: item['isReversed'] as bool,
+        positionMeaning: item['positionMeaning'] as String,
+      );
+    }).toList();
+  } catch (e) {
+    debugPrint('cardsFromJson error: $e');
+    return [];
+  }
+}
+
+String formatTimestamp(int ms) {
+  final dt = DateTime.fromMillisecondsSinceEpoch(ms);
+  return '${dt.year}-${dt.month.toString().padLeft(2, '0')}-${dt.day.toString().padLeft(2, '0')} ${dt.hour.toString().padLeft(2, '0')}:${dt.minute.toString().padLeft(2, '0')}';
+}
+
+// ================= 高级玻璃拟态卡片装饰 =================
+BoxDecoration glassDecoration({Color? borderColor, double borderRadius = 18}) {
   return BoxDecoration(
-    // ✨修复点 1：将写死的纯白改成低透明度的暗黑玻璃质感颜色
-    color: const Color.fromRGBO(255, 255, 255, 0.05),
+    color: const Color.fromARGB(255, 19, 5, 43),
     borderRadius: BorderRadius.circular(borderRadius),
     border: Border.all(
-      color: borderColor ?? const Color(0xFFC9A84C),
+      color: borderColor ?? AppColors.glassBorder,
       width: 1,
     ),
     boxShadow: const [
       BoxShadow(
-        color: Color.fromRGBO(201, 168, 76, 0.15), // ✨降低泛光强度，显得更加高级
-        blurRadius: 10,
-        spreadRadius: 1,
+        color: Color(0x33000000), 
+        blurRadius: 15,
+        spreadRadius: -2,
+        offset: Offset(0, 8),
       ),
     ],
   );
 }
 
-// ================= 光晕按钮 =================
+// ================= 光晕按钮 (已集成 InkWell 水波纹) =================
 class GlowButton extends StatefulWidget {
   final Widget child;
   final VoidCallback? onTap;
   final Color glowColor;
   final double borderRadius;
-  const GlowButton({Key? key, required this.child, this.onTap, this.glowColor = const Color(0xFFC9A84C), this.borderRadius = 18}) : super(key: key);
+  const GlowButton({
+    Key? key, 
+    required this.child, 
+    this.onTap, 
+    this.glowColor = AppColors.mysticPurple, 
+    this.borderRadius = 20
+  }) : super(key: key);
 
   @override
   _GlowButtonState createState() => _GlowButtonState();
@@ -537,7 +583,7 @@ class _GlowButtonState extends State<GlowButton> with SingleTickerProviderStateM
   void initState() {
     super.initState();
     _controller = AnimationController(vsync: this, duration: const Duration(milliseconds: 150));
-    _scaleAnimation = Tween<double>(begin: 1.0, end: 0.95).animate(CurvedAnimation(parent: _controller, curve: Curves.easeInOut));
+    _scaleAnimation = Tween<double>(begin: 1.0, end: 0.96).animate(CurvedAnimation(parent: _controller, curve: Curves.easeOut));
   }
 
   @override
@@ -548,45 +594,48 @@ class _GlowButtonState extends State<GlowButton> with SingleTickerProviderStateM
 
   @override
   Widget build(BuildContext context) {
-    return GestureDetector(
-      onTapDown: (_) {
-        setState(() => _isPressed = true);
-        _controller.forward();
-      },
-      onTapUp: (_) {
-        setState(() => _isPressed = false);
-        _controller.reverse();
-        widget.onTap?.call();
-      },
-      onTapCancel: () {
-        setState(() => _isPressed = false);
-        _controller.reverse();
-      },
-      child: AnimatedBuilder(
-        animation: _scaleAnimation,
-        builder: (_, child) => Transform.scale(
-          scale: _scaleAnimation.value,
-          child: Container(
-            decoration: BoxDecoration(
+    return AnimatedBuilder(
+      animation: _scaleAnimation,
+      builder: (_, child) => Transform.scale(
+        scale: _scaleAnimation.value,
+        child: Container(
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(widget.borderRadius),
+            boxShadow: [
+              BoxShadow(
+                color: widget.glowColor.withOpacity(_isPressed ? 0.6 : 0.35),
+                blurRadius: _isPressed ? 24 : 16,
+                spreadRadius: _isPressed ? 4 : 1,
+                offset: const Offset(0, 4),
+              ),
+            ],
+          ),
+          child: Material(
+            color: Colors.transparent,
+            borderRadius: BorderRadius.circular(widget.borderRadius),
+            child: InkWell(
               borderRadius: BorderRadius.circular(widget.borderRadius),
-              boxShadow: [
-                BoxShadow(
-                  color: Color.fromRGBO(
-                    widget.glowColor.red,
-                    widget.glowColor.green,
-                    widget.glowColor.blue,
-                    (_isPressed ? 0.6 : 0.3).clamp(0.0, 1.0),
-                  ),
-                  blurRadius: _isPressed ? 20 : 12,
-                  spreadRadius: _isPressed ? 3 : 1,
-                ),
-              ],
+              onTap: widget.onTap,
+              splashColor: Colors.white.withOpacity(0.2),
+              highlightColor: Colors.transparent,
+              onTapDown: (_) {
+                setState(() => _isPressed = true);
+                _controller.forward();
+              },
+              onTapUp: (_) {
+                setState(() => _isPressed = false);
+                _controller.reverse();
+              },
+              onTapCancel: () {
+                setState(() => _isPressed = false);
+                _controller.reverse();
+              },
+              child: widget.child,
             ),
-            child: child,
           ),
         ),
-        child: widget.child,
       ),
+      child: widget.child,
     );
   }
 }
@@ -617,13 +666,8 @@ class _HomeScreenState extends State<HomeScreen> {
         fetchTimeout: const Duration(minutes: 1),
         minimumFetchInterval: const Duration(seconds: 0),
       ));
-      await remoteConfig.setDefaults({
-        "latest_app_version": currentAppVersion,
-        "apk_download_url": "",
-      });
+      await remoteConfig.setDefaults({"latest_app_version": currentAppVersion, "apk_download_url": ""});
       await remoteConfig.fetchAndActivate();
-      String latestVersion = remoteConfig.getString('latest_app_version');
-      debugPrint("🔮 Version check skipped (testing). fetched: '$latestVersion'");
     } catch (e) {
       debugPrint("Firebase 版本检查失败: $e");
     }
@@ -635,30 +679,27 @@ class _HomeScreenState extends State<HomeScreen> {
       extendBodyBehindAppBar: true,
       appBar: AppBar(
         title: Text(tr(currentLanguage, '塔 罗 灵 境', 'Tarot Realm', 'Dunia Tarot'),
-            style: GoogleFonts.notoSerifSc(fontSize: 24, fontWeight: FontWeight.bold, letterSpacing: 4, color: const Color(0xFFC9A84C), shadows: const [
-              Shadow(color: Color(0xFFC9A84C), blurRadius: 10),
-            ])),
+            style: GoogleFonts.notoSerifSc(
+              fontSize: 24, fontWeight: FontWeight.bold, letterSpacing: 4, 
+              color: const Color.fromARGB(255, 204, 109, 227), 
+              shadows: const [Shadow(color: AppColors.goldGlow, blurRadius: 12)]
+            )),
         actions: [
-          PopupMenuButton<AppLanguage>(
-            onSelected: (AppLanguage result) {
-              setState(() {
-                currentLanguage = result;
-              });
+          // 添加历史记录入口按钮
+          IconButton(
+            icon: const Icon(Icons.history, color: AppColors.gold),
+            onPressed: () {
+              Navigator.push(context, _createRoute(HistoryScreen(lang: currentLanguage)));
             },
-            icon: const Icon(Icons.language, color: Color(0xFFC9A84C)),
+            tooltip: tr(currentLanguage, '历史记录', 'History', 'Sejarah'),
+          ),
+          PopupMenuButton<AppLanguage>(
+            onSelected: (AppLanguage result) => setState(() => currentLanguage = result),
+            icon: const Icon(Icons.language, color: AppColors.gold),
             itemBuilder: (BuildContext context) => <PopupMenuEntry<AppLanguage>>[
-              const PopupMenuItem<AppLanguage>(
-                value: AppLanguage.zh,
-                child: Text('中文 (Chinese)'),
-              ),
-              const PopupMenuItem<AppLanguage>(
-                value: AppLanguage.en,
-                child: Text('English'),
-              ),
-              const PopupMenuItem<AppLanguage>(
-                value: AppLanguage.ms,
-                child: Text('Bahasa Melayu'),
-              ),
+              const PopupMenuItem(value: AppLanguage.zh, child: Text('中文')),
+              const PopupMenuItem(value: AppLanguage.en, child: Text('English')),
+              const PopupMenuItem(value: AppLanguage.ms, child: Text('Bahasa Melayu')),
             ],
           ),
           Center(
@@ -666,7 +707,7 @@ class _HomeScreenState extends State<HomeScreen> {
               padding: const EdgeInsets.only(right: 16.0),
               child: Text(
                 currentLanguage == AppLanguage.zh ? '中文' : currentLanguage == AppLanguage.en ? 'EN' : 'BM',
-                style: const TextStyle(color: Color(0xFFC9A84C), fontWeight: FontWeight.bold),
+                style: const TextStyle(color: AppColors.gold, fontWeight: FontWeight.bold),
               ),
             ),
           )
@@ -675,9 +716,8 @@ class _HomeScreenState extends State<HomeScreen> {
       body: Container(
         decoration: const BoxDecoration(
           gradient: LinearGradient(
-            begin: Alignment.topCenter,
-            end: Alignment.bottomCenter,
-            colors: [Color(0xFF1E112A), Color(0xFF0F0C1B), Color(0xFF000000)],
+            begin: Alignment.topCenter, end: Alignment.bottomCenter,
+            colors: [AppColors.bgTop, AppColors.bgBottom],
           ),
         ),
         child: SafeArea(
@@ -686,30 +726,27 @@ class _HomeScreenState extends State<HomeScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                const Center(child: Icon(Icons.auto_awesome, size: 50, color: Color(0xFFC9A84C))),
+                const Center(child: Icon(Icons.auto_awesome, size: 50, color: AppColors.gold)),
                 const SizedBox(height: 10),
                 Text(tr(currentLanguage, '开启你的占卜结界', 'Open your divination realm', 'Buka alam tenung nasib anda'),
                     textAlign: TextAlign.center,
-                    style: GoogleFonts.notoSerifSc(fontSize: 18, color: Colors.white70, shadows: const [
-                      Shadow(color: Color.fromRGBO(201, 168, 76, 0.4), blurRadius: 6),
-                    ])),
+                    style: GoogleFonts.notoSerifSc(fontSize: 16, color: Colors.white70, letterSpacing: 1.5)),
                 const SizedBox(height: 40),
                 
-                // 话题选择
                 Row(
                   children: [
-                    const Icon(Icons.category, color: Color(0xFFC9A84C), size: 20),
+                    const Icon(Icons.category, color: AppColors.mysticPurple, size: 20),
                     const SizedBox(width: 8),
                     Text(tr(currentLanguage, '你想占卜什么？', 'What would you like to ask?', 'Apa yang anda ingin tanya?'),
-                        style: GoogleFonts.notoSerifSc(fontSize: 18, color: const Color(0xFFC9A84C), fontWeight: FontWeight.bold, shadows: const [
-                          Shadow(color: Color.fromRGBO(201, 168, 76, 0.5), blurRadius: 5),
-                        ])),
+                        style: GoogleFonts.notoSerifSc(
+                          fontSize: 18, color: AppColors.gold, fontWeight: FontWeight.bold, 
+                          shadows: const [Shadow(color: AppColors.goldGlow, blurRadius: 6)]
+                        )),
                   ],
                 ),
-                const SizedBox(height: 15),
+                const SizedBox(height: 16),
                 Wrap(
-                  spacing: 12,
-                  runSpacing: 12,
+                  spacing: 12, runSpacing: 12,
                   children: availableTopics.map((topic) {
                     final isSelected = selectedTopic == topic;
                     return GestureDetector(
@@ -719,61 +756,44 @@ class _HomeScreenState extends State<HomeScreen> {
                       },
                       child: AnimatedContainer(
                         duration: const Duration(milliseconds: 300),
-                        padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 10),
+                        padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 12),
                         decoration: BoxDecoration(
-                          color: isSelected
-                              ? const Color.fromRGBO(201, 168, 76, 0.2)
-                              : const Color.fromRGBO(255, 255, 255, 0.05),
+                          color: isSelected ? const Color.fromARGB(255, 123, 2, 115) : AppColors.glassBg,
                           borderRadius: BorderRadius.circular(30),
                           border: Border.all(
-                            color: isSelected ? const Color(0xFFC9A84C) : Colors.white10,
+                            color: isSelected ? AppColors.gold : Colors.white10,
                             width: 1.2,
                           ),
-                          boxShadow: isSelected
-                              ? const [
-                                  BoxShadow(
-                                    color: Color.fromRGBO(201, 168, 76, 0.4),
-                                    blurRadius: 12,
-                                    spreadRadius: 2,
-                                  )
-                                ]
-                              : [],
+                          boxShadow: isSelected ? [
+                            BoxShadow(color: AppColors.gold.withOpacity(0.3), blurRadius: 12, spreadRadius: 1)
+                          ] : [],
                         ),
                         child: Text(
                           topic.text(currentLanguage),
                           style: TextStyle(
-                            color: isSelected ? Colors.white : Colors.white54,
-                            fontSize: 15,
-                            fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
-                            letterSpacing: isSelected ? 0.8 : 0,
-                            shadows: isSelected
-                                ? const [
-                                    Shadow(
-                                      color: Color.fromRGBO(201, 168, 76, 0.8),
-                                      blurRadius: 8,
-                                    )
-                                  ]
-                                : [],
+                            color: isSelected ? Colors.white : const Color.fromARGB(246, 253, 252, 252),
+                            fontSize: 15, fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
+                            letterSpacing: 0.5,
                           ),
                         ),
                       ),
                     );
                   }).toList(),
                 ),
-                const SizedBox(height: 40),
+                const SizedBox(height: 45),
 
-                // 牌阵选择 (玻璃质感卡片)
                 Row(
                   children: [
-                    const Icon(Icons.dashboard_customize, color: Color(0xFFC9A84C), size: 20),
+                    const Icon(Icons.dashboard_customize, color: AppColors.mysticPurple, size: 20),
                     const SizedBox(width: 8),
                     Text(tr(currentLanguage, '请选择灵力法阵', 'Select a spread', 'Sila pilih susunan kad'),
-                        style: GoogleFonts.notoSerifSc(fontSize: 18, color: const Color(0xFFC9A84C), fontWeight: FontWeight.bold, shadows: const [
-                          Shadow(color: Color.fromRGBO(201, 168, 76, 0.5), blurRadius: 5),
-                        ])),
+                        style: GoogleFonts.notoSerifSc(
+                          fontSize: 18, color: AppColors.gold, fontWeight: FontWeight.bold, 
+                          shadows: const [Shadow(color: AppColors.goldGlow, blurRadius: 6)]
+                        )),
                   ],
                 ),
-                const SizedBox(height: 15),
+                const SizedBox(height: 16),
                 ...availableSpreads.map((spread) {
                   final isSelected = selectedSpread == spread;
                   return GestureDetector(
@@ -783,21 +803,15 @@ class _HomeScreenState extends State<HomeScreen> {
                     },
                     child: AnimatedContainer(
                       duration: const Duration(milliseconds: 300),
-                      margin: const EdgeInsets.only(bottom: 15),
-                      padding: const EdgeInsets.all(16),
+                      margin: const EdgeInsets.only(bottom: 16),
+                      padding: const EdgeInsets.all(20),
                       decoration: glassDecoration(
-                        borderColor: isSelected ? const Color(0xFFC9A84C) : Colors.white12,
+                        borderColor: isSelected ? AppColors.gold : Colors.white12,
                       ).copyWith(
-                        color: isSelected
-                            ? const Color.fromRGBO(201, 168, 76, 0.1)
-                            : const Color.fromRGBO(255, 255, 255, 0.03),
-                        boxShadow: isSelected ? const [
-                          BoxShadow(
-                            color: Color.fromRGBO(201, 168, 76, 0.4),
-                            blurRadius: 12,
-                            spreadRadius: 1,
-                          )
-                        ] : [],
+                        color: isSelected ? AppColors.pink : AppColors.glassBg,
+                        boxShadow: isSelected ? [
+                          BoxShadow(color: AppColors.pink, blurRadius: 15, spreadRadius: 0)
+                        ] : const [BoxShadow(color: Color(0x33000000), blurRadius: 10, offset: Offset(0, 4))],
                       ),
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
@@ -807,32 +821,29 @@ class _HomeScreenState extends State<HomeScreen> {
                             children: [
                               Text(spread.name(currentLanguage),
                                   style: TextStyle(
-                                      fontSize: 18,
-                                      fontWeight: FontWeight.bold,
-                                      color: isSelected ? const Color(0xFFC9A84C) : Colors.white,
-                                      shadows: isSelected ? const [
-                                        Shadow(color: Color.fromRGBO(201, 168, 76, 0.6), blurRadius: 8),
-                                      ] : [])),
+                                      fontSize: 18, fontWeight: FontWeight.bold,
+                                      color: isSelected ? AppColors.gold : Colors.white,
+                                      shadows: isSelected ? const [Shadow(color: AppColors.goldGlow, blurRadius: 8)] : []
+                                  )),
                               if (isSelected)
-                                const Icon(Icons.check_circle, color: Color(0xFFC9A84C), size: 20)
+                                const Icon(Icons.check_circle, color: AppColors.gold, size: 22)
                             ],
                           ),
-                          const SizedBox(height: 8),
+                          const SizedBox(height: 10),
                           Text(spread.description(currentLanguage),
                               style: TextStyle(
-                                  fontSize: 13,
-                                  height: 1.5,
-                                  color: isSelected ? Colors.white : Colors.white54)),
+                                  fontSize: 14, height: 1.6,
+                                  color: isSelected ? Colors.white70 : Colors.white54)),
                         ],
                       ),
                     ),
                   );
                 }).toList(),
 
-                const SizedBox(height: 40),
+                const SizedBox(height: 45),
 
-                // 抽牌按钮
                 GlowButton(
+                  glowColor: AppColors.mysticPurple,
                   onTap: () {
                     AudioManager().playSfx('audio/magic_start.mp3');
                     Navigator.push(context, _createRoute(VirtualDrawScreen(topic: selectedTopic, spread: selectedSpread, lang: currentLanguage)));
@@ -840,11 +851,12 @@ class _HomeScreenState extends State<HomeScreen> {
                   child: _buildActionButton(
                     icon: Icons.touch_app,
                     label: tr(currentLanguage, '线上虚拟抽牌 (3D翻牌)', 'Virtual draw (3D flip)', 'Cabutan Maya (Balikan 3D)'),
-                    colors: const [Color(0xFFC9A84C), Color(0xFF8B7500)],
+                    colors: const [Color(0xFF8E54E9), Color(0xFF4776E6)],
                   ),
                 ),
-                const SizedBox(height: 15),
+                const SizedBox(height: 16),
                 GlowButton(
+                  glowColor: const Color(0xFF283593),
                   onTap: () {
                     AudioManager().playSfx('audio/magic_start.mp3');
                     Navigator.push(context, _createRoute(ManualDrawScreen(topic: selectedTopic, spread: selectedSpread, lang: currentLanguage)));
@@ -852,10 +864,10 @@ class _HomeScreenState extends State<HomeScreen> {
                   child: _buildActionButton(
                     icon: Icons.view_module,
                     label: tr(currentLanguage, '现实自主选牌 (手动录入)', 'Manual card entry', 'Pilihan Kad Manual'),
-                    colors: const [Color(0xFF5A4A8C), Color(0xFF3A2A5C)],
+                    colors: const [Color(0xFF3949AB), Color(0xFF1A237E)], 
                   ),
                 ),
-                const SizedBox(height: 40),
+                const SizedBox(height: 50),
               ],
             ),
           ),
@@ -866,52 +878,129 @@ class _HomeScreenState extends State<HomeScreen> {
 
   Widget _buildActionButton({required IconData icon, required String label, required List<Color> colors}) {
     return Container(
-      height: 56,
+      height: 60,
       decoration: BoxDecoration(
-        gradient: LinearGradient(
-          colors: colors,
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-        ),
-        borderRadius: BorderRadius.circular(18),
+        gradient: LinearGradient(colors: colors, begin: Alignment.topLeft, end: Alignment.bottomRight),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: Colors.white.withOpacity(0.15), width: 1),
       ),
-      child: Material(
-        color: Colors.transparent,
-        borderRadius: BorderRadius.circular(18),
-        child: InkWell(
-          borderRadius: BorderRadius.circular(18),
-          splashColor: const Color.fromRGBO(255, 255, 255, 0.2),
-          highlightColor: const Color.fromRGBO(255, 255, 255, 0.1),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Icon(icon, color: Colors.white, size: 24),
-              const SizedBox(width: 12),
-              Text(
-                label,
-                style: const TextStyle(
-                  fontSize: 17,
-                  color: Colors.white,
-                  fontWeight: FontWeight.w600,
-                  letterSpacing: 1.2,
-                  shadows: [
-                    Shadow(
-                      color: Colors.black38,
-                      blurRadius: 4,
-                      offset: Offset(0, 2),
-                    ),
-                  ],
-                ),
+      child: Center(
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(icon, color: Colors.white, size: 24),
+            const SizedBox(width: 12),
+            Text(
+              label,
+              style: const TextStyle(
+                fontSize: 17, color: Colors.white, fontWeight: FontWeight.w600, letterSpacing: 1.2,
+                shadows: [Shadow(color: Colors.black45, blurRadius: 6, offset: Offset(0, 2))],
               ),
-            ],
-          ),
+            ),
+          ],
         ),
       ),
     );
   }
 }
 
-// ================= 法阵可视化引擎 (带虚线光晕连线) =================
+// ================= 新增：历史记录界面 =================
+class HistoryScreen extends StatelessWidget {
+  final AppLanguage lang;
+  const HistoryScreen({Key? key, required this.lang}) : super(key: key);
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(
+        title: Text(tr(lang, '灵境档案 (历史)', 'Divination History', 'Rekod Sejarah')),
+      ),
+      body: Container(
+        decoration: const BoxDecoration(
+          gradient: LinearGradient(begin: Alignment.topCenter, end: Alignment.bottomCenter, colors: [AppColors.bgTop, AppColors.bgBottom]),
+        ),
+        child: ValueListenableBuilder<Box<ReadingRecord>>(
+          valueListenable: Hive.box<ReadingRecord>('reading_history').listenable(),
+          builder: (context, box, _) {
+            if (box.isEmpty) {
+              return Center(
+                child: Text(
+                  tr(lang, '尚未留下灵境足迹...', 'No records found in the realm...', 'Tiada rekod ditemui...'),
+                  style: const TextStyle(color: Colors.white54, fontSize: 16),
+                ),
+              );
+            }
+            
+            final records = box.values.toList()..sort((a, b) => b.timestamp.compareTo(a.timestamp));
+            
+            return ListView.builder(
+              padding: const EdgeInsets.symmetric(vertical: 16),
+              itemCount: records.length,
+              itemBuilder: (ctx, index) {
+                final record = records[index];
+                
+                // 根据保存的 Zh 名字找到原始配置，若找不到则返回默认第一项防崩溃
+                final topic = availableTopics.firstWhere((t) => t.zh == record.topicZh, orElse: () => availableTopics[0]);
+                final spread = availableSpreads.firstWhere((s) => s.nameZh == record.spreadZh, orElse: () => availableSpreads[0]);
+                final savedLang = AppLanguage.values[record.langIndex];
+                
+                return Dismissible(
+                  key: Key(record.id),
+                  direction: DismissDirection.endToStart,
+                  background: Container(
+                    color: Colors.redAccent.withOpacity(0.8),
+                    alignment: Alignment.centerRight,
+                    padding: const EdgeInsets.only(right: 20),
+                    child: const Icon(Icons.delete_outline, color: Colors.white, size: 28),
+                  ),
+                  onDismissed: (_) {
+                    box.delete(record.id);
+                  },
+                  child: Container(
+                    margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                    decoration: glassDecoration(borderRadius: 16, borderColor: AppColors.mysticPurpleDim),
+                    child: ListTile(
+                      contentPadding: const EdgeInsets.all(16),
+                      title: Text(
+                        topic.text(lang),
+                        style: const TextStyle(color: AppColors.gold, fontWeight: FontWeight.bold, fontSize: 17),
+                      ),
+                      subtitle: Padding(
+                        padding: const EdgeInsets.only(top: 8),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(spread.name(lang), style: const TextStyle(color: Colors.white70, fontSize: 14)),
+                            const SizedBox(height: 6),
+                            Text(formatTimestamp(record.timestamp), style: const TextStyle(color: Colors.white38, fontSize: 12)),
+                          ],
+                        ),
+                      ),
+                      trailing: const Icon(Icons.arrow_forward_ios, color: Colors.white24, size: 16),
+                      onTap: () {
+                        AudioManager().playSfx('audio/click.wav');
+                        Navigator.push(context, _createRoute(ReadingScreen(
+                          cards: cardsFromJson(record.cardsJson),
+                          topic: topic,
+                          spread: spread,
+                          lang: savedLang,
+                          isFromHistory: true,
+                          historyAiResponse: record.aiResponse,
+                        )));
+                      },
+                    ),
+                  ),
+                );
+              },
+            );
+          },
+        ),
+      ),
+    );
+  }
+}
+
+// ================= 法阵可视化引擎 (幽邃光晕连线) =================
 class SpreadVisualizer extends StatelessWidget {
   final String spreadName; 
   final List<Widget> cards;
@@ -990,19 +1079,11 @@ class SpreadVisualizer extends StatelessWidget {
       segments = [ const [Offset(167.5, 332.5), Offset(52.5, 332.5)], const [Offset(167.5, 332.5), Offset(282.5, 332.5)], const [Offset(167.5, 332.5), Offset(167.5, 107.5)], const [Offset(167.5, 332.5), Offset(167.5, 557.5)] ];
     } else if (name.contains('二择一')) {
       segments = [ const [Offset(167.5, 507.5), Offset(87.5, 307.5)], const [Offset(167.5, 507.5), Offset(247.5, 307.5)], const [Offset(87.5, 307.5), Offset(47.5, 107.5)], const [Offset(247.5, 307.5), Offset(287.5, 107.5)] ];
-    } else if (name.contains('凯尔特')) {
-      segments = [];
     }
-    return CustomPaint(
-      painter: _DashedLinePainter(segments: segments),
-      size: Size(w, h),
-    );
+    return CustomPaint(painter: _DashedLinePainter(segments: segments), size: Size(w, h));
   }
 
-  Widget _safeCard(int index) {
-    if (index < cards.length) return cards[index];
-    return const SizedBox();
-  }
+  Widget _safeCard(int index) => index < cards.length ? cards[index] : const SizedBox(width: 95, height: 215);
 }
 
 class _DashedLinePainter extends CustomPainter {
@@ -1012,21 +1093,21 @@ class _DashedLinePainter extends CustomPainter {
   @override
   void paint(Canvas canvas, Size size) {
     final paint = Paint()
-      ..color = const Color.fromRGBO(155, 89, 182, 0.15)
+      ..color = AppColors.mysticPurple.withOpacity(0.35)
       ..strokeWidth = 1.5
       ..style = PaintingStyle.stroke;
-    const dashWidth = 8.0;
-    const dashSpace = 5.0;
+    const dashWidth = 6.0;
+    const dashSpace = 4.0;
 
     for (var seg in segments) {
-      if (seg.length == 2) {
-        _drawDashedLine(canvas, seg[0], seg[1], paint, dashWidth, dashSpace);
-      }
+      if (seg.length == 2) _drawDashedLine(canvas, seg[0], seg[1], paint, dashWidth, dashSpace);
     }
   }
 
   void _drawDashedLine(Canvas canvas, Offset start, Offset end, Paint paint, double dashWidth, double dashSpace) {
     double distance = (end - start).distance;
+    if (distance <= 0) return; 
+    
     double drawLength = dashWidth;
     double currentDistance = 0;
     while (currentDistance < distance) {
@@ -1071,9 +1152,7 @@ class _VirtualDrawScreenState extends State<VirtualDrawScreen> {
   }
 
   void onCardFlipped() {
-    setState(() {
-      flippedCount++;
-    });
+    setState(() => flippedCount++);
     HapticFeedback.heavyImpact(); 
     AudioManager().playSfx('audio/card_flip.mp3');
   }
@@ -1088,12 +1167,12 @@ class _VirtualDrawScreenState extends State<VirtualDrawScreen> {
         child: Column(
           children: [
             Container(
-              height: 35,
-              alignment: Alignment.center,
+              height: 35, alignment: Alignment.center,
               child: Text(drawnCards[index].positionMeaning, 
-                style: const TextStyle(color: Color(0xFFC9A84C), fontSize: 12, fontWeight: FontWeight.bold, shadows: [
-                  Shadow(color: Color(0xFFC9A84C), blurRadius: 6),
-                ]),
+                style: const TextStyle(
+                  color: AppColors.gold, fontSize: 12, fontWeight: FontWeight.bold, 
+                  shadows: [Shadow(color: AppColors.goldGlow, blurRadius: 6)]
+                ),
                 textAlign: TextAlign.center, maxLines: 2,
               ),
             ),
@@ -1114,7 +1193,7 @@ class _VirtualDrawScreenState extends State<VirtualDrawScreen> {
       body: Container(
         width: double.infinity,
         decoration: const BoxDecoration(
-          gradient: LinearGradient(begin: Alignment.topCenter, end: Alignment.bottomCenter, colors: [Color(0xFF1E112A), Color(0xFF0F0C1B)]),
+          gradient: LinearGradient(begin: Alignment.topCenter, end: Alignment.bottomCenter, colors: [AppColors.bgTop, AppColors.bgBottom]),
         ),
         child: Column(
           children: [
@@ -1126,9 +1205,8 @@ class _VirtualDrawScreenState extends State<VirtualDrawScreen> {
                     : widget.lang == AppLanguage.ms 
                     ? 'Tumpukan pada soalan anda tentang 【${widget.topic.text(widget.lang)}】 dan terbalikkan kad mengikut urutan.'
                     : '冥想关于【${widget.topic.text(widget.lang)}】的问题，依次翻开下方阵法中的卡牌',
-                style: const TextStyle(fontSize: 15, color: Color(0xFFFFD700), shadows: [
-                  Shadow(color: Color(0xFFC9A84C), blurRadius: 6),
-                ]),
+                style: const TextStyle(fontSize: 15, color: Colors.white70, shadows: [Shadow(color: AppColors.mysticPurpleDim, blurRadius: 8)]),
+                textAlign: TextAlign.center,
               ),
             ),
             
@@ -1136,10 +1214,7 @@ class _VirtualDrawScreenState extends State<VirtualDrawScreen> {
               child: Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 10),
                 child: Center(
-                  child: SpreadVisualizer(
-                    spreadName: widget.spread.nameZh, 
-                    cards: cardWidgets,
-                  ),
+                  child: SpreadVisualizer(spreadName: widget.spread.nameZh, cards: cardWidgets),
                 ),
               ),
             ),
@@ -1147,23 +1222,20 @@ class _VirtualDrawScreenState extends State<VirtualDrawScreen> {
             if (flippedCount == widget.spread.positions(widget.lang).length)
               Container(
                 width: double.infinity,
-                padding: const EdgeInsets.all(20),
+                padding: const EdgeInsets.all(24),
                 child: GlowButton(
-                  onTap: () {
-                    Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => ReadingScreen(cards: drawnCards, topic: widget.topic, spread: widget.spread, lang: widget.lang)));
-                  },
+                  glowColor: AppColors.gold,
+                  onTap: () => Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => ReadingScreen(cards: drawnCards, topic: widget.topic, spread: widget.spread, lang: widget.lang))),
                   child: Container(
-                    padding: const EdgeInsets.symmetric(vertical: 16),
+                    padding: const EdgeInsets.symmetric(vertical: 18),
                     decoration: BoxDecoration(
-                      gradient: const LinearGradient(colors: [Color(0xFFC9A84C), Color(0xFF8B7500)]),
+                      gradient: const LinearGradient(colors: [Color(0xFFE8C37C), Color(0xFFA67C00)]),
                       borderRadius: BorderRadius.circular(30),
                     ),
                     child: Center(
                       child: Text(
-                        widget.lang == AppLanguage.en ? '✨ Reveal the reading' 
-                            : widget.lang == AppLanguage.ms ? '✨ Dedahkan bacaan'
-                            : '✨ 揭晓天机',
-                        style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.black),
+                        widget.lang == AppLanguage.en ? '✨ Reveal the reading' : widget.lang == AppLanguage.ms ? '✨ Dedahkan bacaan' : '✨ 揭晓天机',
+                        style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.black87),
                       ),
                     ),
                   ),
@@ -1194,19 +1266,17 @@ class _TarotCardWidgetState extends State<TarotCardWidget> with TickerProviderSt
   
   late AnimationController _glowBurstController;
   late Animation<double> _glowBurstAnimation;
-
   late AnimationController _backGlowController;
 
   @override 
   void initState() {
     super.initState();
-    _flipController = AnimationController(vsync: this, duration: const Duration(milliseconds: 700));
-    _flipAnimation = Tween<double>(begin: 0, end: 1).animate(CurvedAnimation(parent: _flipController, curve: Curves.easeInOut));
+    _flipController = AnimationController(vsync: this, duration: const Duration(milliseconds: 750));
+    _flipAnimation = Tween<double>(begin: 0, end: 1).animate(CurvedAnimation(parent: _flipController, curve: Curves.easeOutBack));
     
     _glowBurstController = AnimationController(vsync: this, duration: const Duration(milliseconds: 800));
     _glowBurstAnimation = Tween<double>(begin: 0.0, end: 1.0).animate(CurvedAnimation(parent: _glowBurstController, curve: Curves.easeOut));
-
-    _backGlowController = AnimationController(vsync: this, duration: const Duration(seconds: 3))..repeat();
+    _backGlowController = AnimationController(vsync: this, duration: const Duration(seconds: 4))..repeat();
   }
 
   void _flipCard() {
@@ -1214,115 +1284,114 @@ class _TarotCardWidgetState extends State<TarotCardWidget> with TickerProviderSt
       _flipController.forward();
       _isFront = true;
       widget.onFlipped();
-      Future.delayed(const Duration(milliseconds: 300), () {
+      Future.delayed(const Duration(milliseconds: 350), () {
         if (mounted) _glowBurstController.forward(from: 0.0);
       });
     }
   }
 
-@override 
-Widget build(BuildContext context) {
-  return AnimatedBuilder(
-    animation: _flipAnimation,
-    builder: (context, child) {
-      final angle = _flipAnimation.value * pi;
-      final isUnderBack = angle > pi / 2;
-      
-      Widget cardUI;
-      if (isUnderBack) {
-        cardUI = Transform(
-          transform: Matrix4.identity()..rotateY(pi)..rotateZ(widget.drawnCard.isReversed ? pi : 0),
-          alignment: Alignment.center,
-          child: Container(
-            decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(6),
-              border: Border.all(color: const Color(0xFFC9A84C), width: 2),
-              boxShadow: const [BoxShadow(color: Color.fromRGBO(201, 168, 76, 0.5), blurRadius: 12)]
-            ),
-            child: ClipRRect(
-              borderRadius: BorderRadius.circular(4),
-              child: Image.asset('assets/images/${widget.drawnCard.card.img}', fit: BoxFit.cover, errorBuilder: (context, error, stackTrace) => Container(color: Colors.grey[800])),
-            ),
-          ),
-        );
-      } else {
-        cardUI = Container(
-          decoration: BoxDecoration(
-            gradient: const LinearGradient(
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
-              colors: [Color(0xFF2A1E4A), Color(0xFF120C24)],
-            ),
-            border: Border.all(color: const Color.fromRGBO(201, 168, 76, 0.6), width: 1.5),
-            borderRadius: BorderRadius.circular(6),
-            boxShadow: const [
-              BoxShadow(color: Color.fromRGBO(201, 168, 76, 0.3), blurRadius: 8, spreadRadius: 1),
-              BoxShadow(color: Colors.black26, blurRadius: 4, offset: Offset(2, 2)),
-            ],
-          ),
-          child: Stack(
-            children: [
-              const Center(
-                child: Icon(Icons.auto_awesome, color: Color.fromRGBO(201, 168, 76, 0.7), size: 38),
+  @override 
+  Widget build(BuildContext context) {
+    return AnimatedBuilder(
+      animation: _flipAnimation,
+      builder: (context, child) {
+        final angle = _flipAnimation.value * pi;
+        final isUnderBack = angle > pi / 2;
+        
+        Widget cardUI;
+        if (isUnderBack) {
+          cardUI = Transform(
+            transform: Matrix4.identity()..rotateY(pi)..rotateZ(widget.drawnCard.isReversed ? pi : 0),
+            alignment: Alignment.center,
+            child: Container(
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: AppColors.gold, width: 1.5),
+                boxShadow: const [BoxShadow(color: AppColors.mysticPurpleDim, blurRadius: 16, spreadRadius: 1)]
               ),
-              const Positioned(top: 6, left: 6, child: Icon(Icons.star, color: Color.fromRGBO(201, 168, 76, 0.4), size: 14)),
-              const Positioned(bottom: 6, right: 6, child: Icon(Icons.star, color: Color.fromRGBO(201, 168, 76, 0.4), size: 14)),
-              Center(
-                child: RotationTransition(
-                  turns: _backGlowController,
-                  child: Container(
-                    width: 60, height: 60,
-                    decoration: BoxDecoration(
-                      shape: BoxShape.circle,
-                      border: Border.all(color: const Color.fromRGBO(255, 215, 0, 0.5), width: 2),
-                      boxShadow: const [BoxShadow(color: Color.fromRGBO(255, 215, 0, 0.2), blurRadius: 8)],
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(6),
+                child: Image.asset('assets/images/${widget.drawnCard.card.img}', fit: BoxFit.cover, errorBuilder: (context, error, stackTrace) => Container(color: Colors.grey[900])),
+              ),
+            ),
+          );
+        } else {
+          cardUI = Container(
+            decoration: BoxDecoration(
+              gradient: const LinearGradient(
+                begin: Alignment.topLeft, end: Alignment.bottomRight,
+                colors: [AppColors.cardBackLight, AppColors.cardBackDark],
+              ),
+              border: Border.all(color: AppColors.gold.withOpacity(0.5), width: 1.5),
+              borderRadius: BorderRadius.circular(8),
+              boxShadow: [
+                BoxShadow(color: AppColors.gold.withOpacity(0.2), blurRadius: 10, spreadRadius: 1),
+                const BoxShadow(color: Colors.black45, blurRadius: 6, offset: Offset(2, 4)),
+              ],
+            ),
+            child: Stack(
+              children: [
+                Center(child: Icon(Icons.auto_awesome, color: AppColors.mysticPurple.withOpacity(0.8), size: 40)),
+                Positioned(top: 8, left: 8, child: Icon(Icons.star, color: AppColors.gold.withOpacity(0.4), size: 12)),
+                Positioned(bottom: 8, right: 8, child: Icon(Icons.star, color: AppColors.gold.withOpacity(0.4), size: 12)),
+                Center(
+                  child: RotationTransition(
+                    turns: _backGlowController,
+                    child: Container(
+                      width: 65, height: 65,
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        border: Border.all(color: AppColors.gold.withOpacity(0.4), width: 1.5),
+                        boxShadow: [BoxShadow(color: AppColors.gold.withOpacity(0.15), blurRadius: 10)],
+                      ),
                     ),
                   ),
                 ),
-              ),
-            ],
-          ),
-        );
-      }
-      
-      if (widget.isCrossed) cardUI = Transform.rotate(angle: pi / 2, child: cardUI);
-      
-      Widget finalCard = Stack(
-        children: [
-          GestureDetector(onTap: _flipCard, child: cardUI),
-          if (_isFront)
-            AnimatedBuilder(
-              animation: _glowBurstAnimation,
-              builder: (_, child) {
-                final burstAlpha = (0.8 * (1 - _glowBurstAnimation.value)).clamp(0.0, 1.0);
-                return Opacity(
-                  opacity: 1.0 - _glowBurstAnimation.value,
-                  child: Container(
-                    width: 95,
-                    height: 150,
-                    decoration: BoxDecoration(
-                      shape: BoxShape.circle,
-                      boxShadow: [
-                        BoxShadow(
-                          color: Color.fromRGBO(255, 215, 0, burstAlpha),
-                          blurRadius: 30 * _glowBurstAnimation.value + 10,
-                          spreadRadius: 20 * _glowBurstAnimation.value,
-                        ),
-                      ],
-                    ),
-                  ),
-                );
-              },
+              ],
             ),
-        ]
-      );
-      return finalCard;
-    },
-  );
-}
+          );
+        }
+        
+        if (widget.isCrossed) cardUI = Transform.rotate(angle: pi / 2, child: cardUI);
+        
+        return Stack(
+          alignment: Alignment.center,
+          children: [
+            GestureDetector(onTap: _flipCard, child: cardUI),
+            if (_isFront)
+              AnimatedBuilder(
+                animation: _glowBurstAnimation,
+                builder: (_, child) {
+                  final burstAlpha = (0.7 * (1 - _glowBurstAnimation.value)).clamp(0.0, 1.0);
+                  return Opacity(
+                    opacity: 1.0 - _glowBurstAnimation.value,
+                    child: Container(
+                      width: 95, height: 160,
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        boxShadow: [
+                          BoxShadow(
+                            color: AppColors.cyanGlow.withOpacity(burstAlpha),
+                            blurRadius: 40 * _glowBurstAnimation.value + 15,
+                            spreadRadius: 25 * _glowBurstAnimation.value,
+                          ),
+                        ],
+                      ),
+                    ),
+                  );
+                },
+              ),
+          ]
+        );
+      },
+    );
+  }
 
   @override 
   void dispose() { 
+    _flipController.stop();
+    _glowBurstController.stop();
+    _backGlowController.stop();
     _flipController.dispose(); 
     _glowBurstController.dispose();
     _backGlowController.dispose(); 
@@ -1357,13 +1426,11 @@ class _ManualDrawScreenState extends State<ManualDrawScreen> {
       context: context,
       builder: (context) {
         return AlertDialog(
-          backgroundColor: const Color(0xFF1E1E1E),
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+          backgroundColor: AppColors.glassBg.withOpacity(0.95),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20), side: const BorderSide(color: AppColors.gold, width: 1)),
           title: Text(
             '【${card.name(widget.lang)}】' + (widget.lang == AppLanguage.en ? ' State?' : widget.lang == AppLanguage.ms ? ' Keadaan?' : '的状态是？'), 
-            style: const TextStyle(color: Color(0xFFC9A84C), shadows: [
-              Shadow(color: Color(0xFFC9A84C), blurRadius: 8),
-            ])
+            style: const TextStyle(color: AppColors.gold, shadows: [Shadow(color: AppColors.goldGlow, blurRadius: 8)])
           ),
           content: Text(
             widget.lang == AppLanguage.en ? 'Recall the upright or reversed state of this card when you drew it.' 
@@ -1413,7 +1480,7 @@ class _ManualDrawScreenState extends State<ManualDrawScreen> {
         final c = selectedCards[index];
         Widget img = Transform.rotate(
           angle: c.isReversed ? pi : 0,
-          child: Image.asset('assets/images/${c.card.img}', fit: BoxFit.cover, errorBuilder: (ctx, err, stack) => Container(color: Colors.grey[800])),
+          child: Image.asset('assets/images/${c.card.img}', fit: BoxFit.cover, errorBuilder: (ctx, err, stack) => Container(color: Colors.grey[900])),
         );
         if (isCrossed) img = Transform.rotate(angle: pi / 2, child: img);
 
@@ -1423,14 +1490,12 @@ class _ManualDrawScreenState extends State<ManualDrawScreen> {
             children: [
               Container(
                 height: 35, alignment: Alignment.center,
-                child: Text(c.positionMeaning, style: const TextStyle(color: Color(0xFFC9A84C), fontSize: 12, fontWeight: FontWeight.bold, shadows: [
-                  Shadow(color: Color(0xFFC9A84C), blurRadius: 6),
-                ]), textAlign: TextAlign.center, maxLines: 2),
+                child: Text(c.positionMeaning, style: const TextStyle(color: AppColors.gold, fontSize: 12, fontWeight: FontWeight.bold, shadows: [Shadow(color: AppColors.goldGlow, blurRadius: 6)]), textAlign: TextAlign.center, maxLines: 2),
               ),
               Expanded(
                 child: Container(
-                  decoration: BoxDecoration(border: Border.all(color: const Color(0xFFC9A84C), width: 2), borderRadius: BorderRadius.circular(4)),
-                  child: ClipRRect(borderRadius: BorderRadius.circular(2), child: img),
+                  decoration: BoxDecoration(color: Color(0xFF1A1235), border: Border.all(color: AppColors.gold, width: 1.5), borderRadius: BorderRadius.circular(6)),
+                  child: ClipRRect(borderRadius: BorderRadius.circular(4), child: img),
                 ),
               ),
             ],
@@ -1440,12 +1505,12 @@ class _ManualDrawScreenState extends State<ManualDrawScreen> {
         bool isCurrent = index == selectedCards.length;
         Widget placeholder = Container(
           decoration: BoxDecoration(
-            color: isCurrent ? const Color(0xFFC9A84C): Colors.black38,
-            border: Border.all(color: isCurrent ? const Color(0xFFC9A84C) : Colors.white24, width: isCurrent ? 2 : 1),
+            color: isCurrent ? AppColors.mysticPurple.withOpacity(0.2) : Colors.black38,
+            border: Border.all(color: isCurrent ? AppColors.mysticPurple : Colors.white24, width: isCurrent ? 2 : 1),
             borderRadius: BorderRadius.circular(6),
           ),
           child: Center(
-            child: Icon(Icons.add_circle_outline, color: isCurrent ? const Color(0xFFC9A84C) : Colors.white24, size: 30),
+            child: Icon(Icons.add_circle_outline, color: isCurrent ? AppColors.mysticPurple : Colors.white24, size: 30),
           ),
         );
         if (isCrossed) placeholder = Transform.rotate(angle: pi / 2, child: placeholder);
@@ -1456,7 +1521,7 @@ class _ManualDrawScreenState extends State<ManualDrawScreen> {
             children: [
               Container(
                 height: 35, alignment: Alignment.center,
-                child: Text(widget.spread.positions(widget.lang)[index], style: TextStyle(color: isCurrent ? const Color(0xFFC9A84C) : Colors.white54, fontSize: 12, fontWeight: FontWeight.bold), textAlign: TextAlign.center, maxLines: 2),
+                child: Text(widget.spread.positions(widget.lang)[index], style: TextStyle(color: isCurrent ? AppColors.gold : Colors.white54, fontSize: 12, fontWeight: FontWeight.bold), textAlign: TextAlign.center, maxLines: 2),
               ),
               Expanded(child: placeholder),
             ],
@@ -1468,14 +1533,14 @@ class _ManualDrawScreenState extends State<ManualDrawScreen> {
     return Scaffold(
       appBar: AppBar(
         title: Text(
-          widget.lang == AppLanguage.en ? 'Manual card entry (${selectedCards.length}/$maxCards)' 
-          : widget.lang == AppLanguage.ms ? 'Pilihan kad manual (${selectedCards.length}/$maxCards)'
-          : '现实选牌录入 (${selectedCards.length}/$maxCards)'
+          widget.lang == AppLanguage.en ? 'Manual Entry (${selectedCards.length}/$maxCards)' 
+          : widget.lang == AppLanguage.ms ? 'Pilihan Manual (${selectedCards.length}/$maxCards)'
+          : '选牌录入 (${selectedCards.length}/$maxCards)'
         )
       ),
       body: Container(
         decoration: const BoxDecoration(
-          gradient: LinearGradient(begin: Alignment.topCenter, end: Alignment.bottomCenter, colors: [Color(0xFF1E112A), Color(0xFF0F0C1B)]),
+          gradient: LinearGradient(begin: Alignment.topCenter, end: Alignment.bottomCenter, colors: [AppColors.bgTop, AppColors.bgBottom]),
         ),
         child: Column(
           children: [
@@ -1484,27 +1549,26 @@ class _ManualDrawScreenState extends State<ManualDrawScreen> {
               width: double.infinity,
               padding: const EdgeInsets.symmetric(vertical: 10),
               decoration: const BoxDecoration(
-                color: Colors.black26,
+                color: Color(0x1A000000),
                 border: Border(bottom: BorderSide(color: Colors.white10)),
               ),
               child: SpreadVisualizer(spreadName: widget.spread.nameZh, cards: miniMapCards), 
             ),
             
             Padding(
-              padding: const EdgeInsets.all(12.0),
+              padding: const EdgeInsets.all(16.0),
               child: Text(
                 selectedCards.length < maxCards
                   ? (widget.lang == AppLanguage.en
-                      ? '👉 Select the card for 【${widget.spread.positions(widget.lang)[selectedCards.length]}】 below.'
+                      ? '👉 Select the card for 【${widget.spread.positions(widget.lang)[selectedCards.length]}】'
                       : widget.lang == AppLanguage.ms
-                      ? '👉 Pilih kad untuk 【${widget.spread.positions(widget.lang)[selectedCards.length]}】 di bawah.'
+                      ? '👉 Pilih kad untuk 【${widget.spread.positions(widget.lang)[selectedCards.length]}】'
                       : '👉 请在下方选择【${widget.spread.positions(widget.lang)[selectedCards.length]}】的牌')
-                  : (widget.lang == AppLanguage.en ? '✨ The spread is ready, beginning the reading...' 
-                     : widget.lang == AppLanguage.ms ? '✨ Susunan sudah sedia, memulakan bacaan...'
-                     : '✨ 牌阵已就绪，正在开启解读...'),
-                style: const TextStyle(color: Color(0xFFFFD700), fontSize: 16, fontWeight: FontWeight.bold, shadows: [
-                  Shadow(color: Color(0xFFC9A84C), blurRadius: 8),
-                ]),
+                  : (widget.lang == AppLanguage.en ? '✨ Spread ready, reading...' 
+                     : widget.lang == AppLanguage.ms ? '✨ Susunan sedia, mula bacaan...'
+                     : '✨ 阵法就绪，正在开启解读...'),
+                style: const TextStyle(color: AppColors.cyanGlow, fontSize: 16, fontWeight: FontWeight.bold, shadows: [Shadow(color: AppColors.mysticPurple, blurRadius: 8)]),
+                textAlign: TextAlign.center,
               ),
             ),
             
@@ -1521,7 +1585,7 @@ class _ManualDrawScreenState extends State<ManualDrawScreen> {
                   return GestureDetector(
                     onTap: isPicked ? null : () => _selectCard(card),
                     child: Opacity(
-                      opacity: isPicked ? 0.3 : 1.0,
+                      opacity: isPicked ? 0.25 : 1.0,
                       child: ClipRRect(
                         borderRadius: BorderRadius.circular(6),
                         child: GridTile(
@@ -1534,12 +1598,12 @@ class _ManualDrawScreenState extends State<ManualDrawScreen> {
                             fit: StackFit.expand,
                             children: [
                               Image.asset('assets/images/${card.img}', fit: BoxFit.cover,
-                                 errorBuilder: (c, e, s) => Container(color: Colors.grey[850], child: const Center(child: Icon(Icons.image_not_supported, color: Colors.white24))),
+                                 errorBuilder: (c, e, s) => Container(color: Colors.grey[900], child: const Center(child: Icon(Icons.image_not_supported, color: Colors.white24))),
                               ),
                               if (isPicked)
                                 Container(
                                   color: Colors.black54,
-                                  child: const Center(child: Icon(Icons.check_circle, color: Color(0xFFC9A84C), size: 40)),
+                                  child: const Center(child: Icon(Icons.check_circle, color: AppColors.gold, size: 40)),
                                 )
                             ],
                           ),
@@ -1557,10 +1621,10 @@ class _ManualDrawScreenState extends State<ManualDrawScreen> {
   }
 }
 
-// ================= 打字机效果 Widget (✨修复排版) =================
+// ================= 打字机效果 Widget =================
 class TypewriterText extends StatefulWidget {
-  final String text; final Duration speed; final TextStyle? style; final VoidCallback? onFinished;
-  const TypewriterText({Key? key, required this.text, this.speed = const Duration(milliseconds: 30), this.style, this.onFinished}) : super(key: key);
+  final String text; final Duration speed; final TextStyle? style; final VoidCallback? onFinished; final MarkdownStyleSheet? styleSheet;
+  const TypewriterText({Key? key, required this.text, this.speed = const Duration(milliseconds: 30), this.style, this.styleSheet, this.onFinished}) : super(key: key);
   @override _TypewriterTextState createState() => _TypewriterTextState();
 }
 class _TypewriterTextState extends State<TypewriterText> {
@@ -1587,20 +1651,19 @@ class _TypewriterTextState extends State<TypewriterText> {
     super.dispose();
   }
   @override Widget build(BuildContext context) {
-    // ✨修复点 2：补充了完整的 Markdown 排版样式字典，使排版更华丽工整
     return MarkdownBody(
       data: _displayed,
-      styleSheet: MarkdownStyleSheet(
-        p: widget.style ?? const TextStyle(fontSize: 16, height: 1.8, color: Colors.white, letterSpacing: 0.5),
+      styleSheet: widget.styleSheet ?? MarkdownStyleSheet(
+        p: widget.style ?? const TextStyle(fontSize: 15, height: 1.8, color: Colors.white70, letterSpacing: 0.5),
         pPadding: const EdgeInsets.only(bottom: 12),
-        strong: const TextStyle(color: Color(0xFFC9A84C), fontWeight: FontWeight.bold),
-        h1: const TextStyle(color: Color(0xFFC9A84C), fontSize: 24, fontWeight: FontWeight.bold),
+        strong: const TextStyle(color: AppColors.gold, fontWeight: FontWeight.bold),
+        h1: const TextStyle(color: AppColors.gold, fontSize: 24, fontWeight: FontWeight.bold),
         h1Padding: const EdgeInsets.only(top: 16, bottom: 8),
-        h2: const TextStyle(color: Color(0xFFC9A84C), fontSize: 20, fontWeight: FontWeight.bold),
+        h2: const TextStyle(color: AppColors.gold, fontSize: 20, fontWeight: FontWeight.bold),
         h2Padding: const EdgeInsets.only(top: 16, bottom: 8),
-        h3: const TextStyle(color: Color(0xFFC9A84C), fontSize: 18, fontWeight: FontWeight.bold),
+        h3: const TextStyle(color: AppColors.gold, fontSize: 18, fontWeight: FontWeight.bold),
         h3Padding: const EdgeInsets.only(top: 16, bottom: 8),
-        listBullet: const TextStyle(color: Color(0xFFC9A84C), fontSize: 16),
+        listBullet: const TextStyle(color: AppColors.gold, fontSize: 16),
         listBulletPadding: const EdgeInsets.only(top: 4),
       ),
     );
@@ -1612,20 +1675,16 @@ class ScrollBorderPainter extends CustomPainter {
   @override
   void paint(Canvas canvas, Size size) {
     final paint = Paint()
-      ..color = const Color(0xFFC9A84C)
+      ..color = AppColors.gold.withOpacity(0.7)
       ..style = PaintingStyle.stroke
-      ..strokeWidth = 2;
-    // 左侧轴杆
+      ..strokeWidth = 1.5;
     canvas.drawLine(Offset(8, 20), Offset(8, size.height - 20), paint);
-    canvas.drawCircle(Offset(8, 20), 6, paint);
-    canvas.drawCircle(Offset(8, size.height - 20), 6, paint);
-    // 右侧轴杆
+    canvas.drawCircle(Offset(8, 20), 4, paint);
+    canvas.drawCircle(Offset(8, size.height - 20), 4, paint);
     canvas.drawLine(Offset(size.width - 8, 20), Offset(size.width - 8, size.height - 20), paint);
-    canvas.drawCircle(Offset(size.width - 8, 20), 6, paint);
-    canvas.drawCircle(Offset(size.width - 8, size.height - 20), 6, paint);
-    // 上边
+    canvas.drawCircle(Offset(size.width - 8, 20), 4, paint);
+    canvas.drawCircle(Offset(size.width - 8, size.height - 20), 4, paint);
     canvas.drawLine(Offset(14, 14), Offset(size.width - 14, 14), paint);
-    // 下边
     canvas.drawLine(Offset(14, size.height - 14), Offset(size.width - 14, size.height - 14), paint);
   }
 
@@ -1639,8 +1698,20 @@ class ReadingScreen extends StatefulWidget {
   final Topic topic;
   final SpreadConfig spread; 
   final AppLanguage lang;
+  
+  // 新增的历史相关参数
+  final bool isFromHistory;
+  final String? historyAiResponse;
 
-  const ReadingScreen({Key? key, required this.cards, required this.topic, required this.spread, required this.lang}) : super(key: key);
+  const ReadingScreen({
+    Key? key, 
+    required this.cards, 
+    required this.topic, 
+    required this.spread, 
+    required this.lang,
+    this.isFromHistory = false,
+    this.historyAiResponse,
+  }) : super(key: key);
 
   @override
   _ReadingScreenState createState() => _ReadingScreenState();
@@ -1651,15 +1722,23 @@ class _ReadingScreenState extends State<ReadingScreen> with TickerProviderStateM
   bool isGenerating = false;
   bool showAI = false;
   bool isFinished = false;
+  bool _isError = false; // 新增：标识是否遇到 API 请求失败
 
   final String _proxyUrl = 'https://tai-taro.vercel.app/api/gemini';
-
   late AnimationController _magicCircleController;
 
   @override
   void initState() {
     super.initState();
-    _magicCircleController = AnimationController(vsync: this, duration: const Duration(seconds: 3))..repeat();
+    _magicCircleController = AnimationController(vsync: this, duration: const Duration(seconds: 4))..repeat();
+
+    // 如果是通过历史记录进入，则直接展示结果
+    if (widget.isFromHistory) {
+      showAI = true;
+      isGenerating = false;
+      isFinished = true;
+      aiResponse = widget.historyAiResponse ?? "";
+    }
   }
 
   @override
@@ -1668,10 +1747,31 @@ class _ReadingScreenState extends State<ReadingScreen> with TickerProviderStateM
     super.dispose();
   }
 
+  Future<void> _saveToHistory() async {
+    if (widget.isFromHistory) return;
+
+    try {
+      final box = Hive.box<ReadingRecord>('reading_history');
+      final record = ReadingRecord(
+        id: '${DateTime.now().millisecondsSinceEpoch}-${Random().nextInt(10000)}',
+        timestamp: DateTime.now().millisecondsSinceEpoch,
+        topicZh: widget.topic.zh,
+        spreadZh: widget.spread.nameZh,
+        cardsJson: cardsToJson(widget.cards),
+        aiResponse: aiResponse,
+        langIndex: widget.lang.index,
+      );
+      await box.put(record.id, record);   // 已添加 await
+    } catch (e) {
+      debugPrint('Save history failed: $e');
+    }
+  }
+
   Future<void> _askAI() async {
     setState(() {
       showAI = true;
       isGenerating = true;
+      _isError = false; // 每次请求时重置错误状态
       aiResponse = widget.lang == AppLanguage.en
         ? "🔮 Connecting to the oracle, your tarot master is preparing the reading...\n\n"
         : widget.lang == AppLanguage.ms 
@@ -1708,7 +1808,6 @@ class _ReadingScreenState extends State<ReadingScreen> with TickerProviderStateM
       }
     }
 
-    // ✨修复点 3：在 Prompt 层面强制要求使用 Markdown 排版格式及分段
     if (widget.lang == AppLanguage.en) {
       prompt += "\nPlease answer using the following structure IN ENGLISH ONLY, using Markdown formatting (bold key points, use paragraphs):\n\n" +
         "### 🌟 Energy Sensing\n(Reveal the overall field around ${widget.topic.text(widget.lang)})\n\n" +
@@ -1732,10 +1831,7 @@ class _ReadingScreenState extends State<ReadingScreen> with TickerProviderStateM
     try {
       final response = await http.post(
         Uri.parse(_proxyUrl),
-        headers: {
-          'Content-Type': 'application/json',
-          'x-app-version': '2.1.0', 
-        },
+        headers: {'Content-Type': 'application/json', 'x-app-version': '2.1.0'},
         body: jsonEncode({"prompt": prompt}),
       );
       
@@ -1749,43 +1845,48 @@ class _ReadingScreenState extends State<ReadingScreen> with TickerProviderStateM
             : widget.lang == AppLanguage.ms ? 'Pakar tarot tidak dapat mentafsir sekarang, sila cuba lagi nanti.'
             : '占卜师暂时无法解读，请稍后再试。'
           );
+          _isError = false;
         });
+        // 成功获取解牌后保存至历史记录
+        _saveToHistory();
       } else {
         setState(() {
-          aiResponse = widget.lang == AppLanguage.en
-              ? "⚠️ API Connection failed (${response.statusCode})\n\n${response.body}"
-              : widget.lang == AppLanguage.ms
-              ? "⚠️ Sambungan API gagal (${response.statusCode})\n\n${response.body}"
-              : "⚠️ API 连接失败 (${response.statusCode})\n\n${response.body}";
+          aiResponse = "⚠️ API Failed (${response.statusCode})\n\n${response.body}";
+          _isError = true;
         });
       }
-
     } catch (e) {
-        if (!mounted) return; 
-        setState(() {
-          aiResponse = widget.lang == AppLanguage.en
-              ? "⚠️ The reader lost connection. Please check your network. ($e)"
-              : widget.lang == AppLanguage.ms
-              ? "⚠️ Pakar tarot terputus sambungan. Sila semak rangkaian anda. ($e)"
-              : "⚠️ 占卜师暂时失去了连接，请检查网络。($e)";
-        });
+      if (!mounted) return; 
+      setState(() {
+        aiResponse = "⚠️ Network issue or Master disconnected. ($e)";
+        _isError = true;
+      });
     } finally {
-      if (mounted) { 
-        setState(() {
-          isGenerating = false;
-        });
-      }
+      if (mounted) setState(() => isGenerating = false);
     }
   }
 
+  MarkdownStyleSheet get _mdStyleSheet => MarkdownStyleSheet(
+    p: const TextStyle(fontSize: 15, height: 1.8, color: Colors.white70, letterSpacing: 0.5),
+    pPadding: const EdgeInsets.only(bottom: 12),
+    strong: const TextStyle(color: AppColors.gold, fontWeight: FontWeight.bold),
+    h1: const TextStyle(color: AppColors.gold, fontSize: 24, fontWeight: FontWeight.bold),
+    h1Padding: const EdgeInsets.only(top: 16, bottom: 8),
+    h2: const TextStyle(color: AppColors.gold, fontSize: 20, fontWeight: FontWeight.bold),
+    h2Padding: const EdgeInsets.only(top: 16, bottom: 8),
+    h3: const TextStyle(color: AppColors.gold, fontSize: 18, fontWeight: FontWeight.bold),
+    h3Padding: const EdgeInsets.only(top: 16, bottom: 8),
+    listBullet: const TextStyle(color: AppColors.gold, fontSize: 16),
+    listBulletPadding: const EdgeInsets.only(top: 4),
+  );
+
   Widget _buildTypewriterText() {
     if (aiResponse.isEmpty) return const SizedBox();
-    return TypewriterText(
-      text: aiResponse,
-      speed: const Duration(milliseconds: 30),
-      onFinished: () {
-        if (mounted) setState(() { isFinished = true; });
-      },
+    
+    // 如果是历史记录，直接展示完整 Markdown 排版，跳过打字动画
+    return MarkdownBody(
+      data: aiResponse,
+      styleSheet: _mdStyleSheet,
     );
   }
 
@@ -1797,7 +1898,7 @@ class _ReadingScreenState extends State<ReadingScreen> with TickerProviderStateM
       
       Widget img = Transform.rotate(
         angle: c.isReversed ? pi : 0,
-        child: Image.asset('assets/images/${c.card.img}', fit: BoxFit.cover, errorBuilder: (ctx, err, stack) => Container(color: Colors.grey[800])),
+        child: Image.asset('assets/images/${c.card.img}', fit: BoxFit.cover, errorBuilder: (ctx, err, stack) => Container(color: Colors.grey[900])),
       );
       if (isCrossed) img = Transform.rotate(angle: pi / 2, child: img);
 
@@ -1807,13 +1908,11 @@ class _ReadingScreenState extends State<ReadingScreen> with TickerProviderStateM
           children: [
             Container(
               height: 35, alignment: Alignment.center,
-              child: Text(c.positionMeaning, style: const TextStyle(color: Color(0xFFC9A84C), fontSize: 12, fontWeight: FontWeight.bold, shadows: [
-                Shadow(color: Color(0xFFC9A84C), blurRadius: 6),
-              ]), textAlign: TextAlign.center, maxLines: 2),
+              child: Text(c.positionMeaning, style: const TextStyle(color: AppColors.gold, fontSize: 12, fontWeight: FontWeight.bold, shadows: [Shadow(color: AppColors.goldGlow, blurRadius: 6)]), textAlign: TextAlign.center, maxLines: 2),
             ),
             Expanded(
               child: Container(
-                decoration: BoxDecoration(border: Border.all(color: const Color(0xFFC9A84C), width: 2), borderRadius: BorderRadius.circular(4)),
+                decoration: BoxDecoration(border: Border.all(color: AppColors.gold, width: 1.5), borderRadius: BorderRadius.circular(4)),
                 child: ClipRRect(borderRadius: BorderRadius.circular(2), child: img),
               ),
             ),
@@ -1825,84 +1924,84 @@ class _ReadingScreenState extends State<ReadingScreen> with TickerProviderStateM
     return Scaffold(
       appBar: AppBar(
         title: Text(
-          widget.lang == AppLanguage.en ? '【${widget.topic.text(widget.lang)}】 Guidance Report' 
-          : widget.lang == AppLanguage.ms ? 'Laporan Panduan 【${widget.topic.text(widget.lang)}】'
+          widget.lang == AppLanguage.en ? '【${widget.topic.text(widget.lang)}】 Report' 
+          : widget.lang == AppLanguage.ms ? 'Laporan 【${widget.topic.text(widget.lang)}】'
           : '【${widget.topic.text(widget.lang)}】指引报告', 
-          style: GoogleFonts.notoSerifSc(color: const Color(0xFFC9A84C), shadows: const [
-            Shadow(color: Color(0xFFC9A84C), blurRadius: 8),
-          ])
         )
       ),
       body: Container(
         decoration: const BoxDecoration(
-          gradient: LinearGradient(begin: Alignment.topCenter, end: Alignment.bottomCenter, colors: [Color(0xFF1E112A), Color(0xFF0F0C1B)]),
+          gradient: LinearGradient(begin: Alignment.topCenter, end: Alignment.bottomCenter, colors: [AppColors.bgTop, AppColors.bgBottom]),
         ),
         child: ListView(
           padding: const EdgeInsets.all(16),
           children: [
-            // 牌阵预览 (玻璃效果)
+            // 牌阵预览
             Container(
               height: widget.spread.nameZh.contains('凯尔特') ? 380 : 250,
               padding: const EdgeInsets.symmetric(vertical: 10),
-              margin: const EdgeInsets.only(bottom: 20),
-              decoration: glassDecoration(borderRadius: 16), // ✨调用已修复的半透明玻璃装饰
+              margin: const EdgeInsets.only(bottom: 24),
+              decoration: glassDecoration(borderRadius: 16),
               child: SpreadVisualizer(spreadName: widget.spread.nameZh, cards: miniMapCards), 
             ),
 
-            // 每张牌详解 (玻璃质感卡片)
+            // 每张牌详解
             ...widget.cards.map((c) {
               final status = c.isReversed 
                   ? (widget.lang == AppLanguage.en ? "Reversed" : widget.lang == AppLanguage.ms ? "Terbalik" : "逆位") 
                   : (widget.lang == AppLanguage.en ? "Upright" : widget.lang == AppLanguage.ms ? "Tegak" : "正位");
-              
               final meaning = c.isReversed ? c.card.reversedMeaning(widget.lang) : c.card.uprightMeaning(widget.lang);
 
               return Container(
                 margin: const EdgeInsets.only(bottom: 20),
-                decoration: glassDecoration(borderColor: const Color(0xFFC9A84C)), // ✨调用已修复的半透明玻璃装饰
+                decoration: glassDecoration(borderColor: AppColors.gold), 
                 child: Padding(
-                  padding: const EdgeInsets.all(16.0),
+                  padding: const EdgeInsets.all(20.0),
                   child: Row(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Transform(
                         transform: Matrix4.identity()..rotateZ(c.isReversed ? pi : 0),
                         alignment: Alignment.center,
-                        child: ClipRRect(
-                          borderRadius: BorderRadius.circular(6),
-                          child: Image.asset(
-                            'assets/images/${c.card.img}',
-                            width: 80, height: 140, fit: BoxFit.cover,
-                            errorBuilder: (ctx, err, stack) => Container(width: 80, height: 140, color: Colors.grey[800]),
+                        child: Container(
+                          decoration: BoxDecoration(
+                            border: Border.all(color: AppColors.gold, width: 1),
+                            borderRadius: BorderRadius.circular(6)
+                          ),
+                          child: ClipRRect(
+                            borderRadius: BorderRadius.circular(5),
+                            child: Image.asset(
+                              'assets/images/${c.card.img}',
+                              width: 80, height: 140, fit: BoxFit.cover,
+                              errorBuilder: (ctx, err, stack) => Container(width: 80, height: 140, color: Colors.grey[900]),
+                            ),
                           ),
                         ),
                       ),
-                      const SizedBox(width: 16),
+                      const SizedBox(width: 20),
                       Expanded(
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             Text(
                               '【${c.positionMeaning}】\n${c.card.name(widget.lang)}',
-                              style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Color(0xFFC9A84C), height: 1.3, shadows: [
-                                Shadow(color: Color(0xFFC9A84C), blurRadius: 6),
-                              ]),
+                              style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: AppColors.gold, height: 1.4, shadows: [Shadow(color: AppColors.goldGlow, blurRadius: 4)]),
                             ),
-                            const SizedBox(height: 5),
+                            const SizedBox(height: 8),
                             Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                               decoration: BoxDecoration(
-                                color: c.isReversed ? Colors.redAccent.withAlpha(50) : Colors.greenAccent.withAlpha(50),
+                                color: c.isReversed ? Colors.redAccent.withOpacity(0.15) : AppColors.cyanGlow.withOpacity(0.15),
                                 borderRadius: BorderRadius.circular(4),
-                                border: Border.all(color: c.isReversed ? Colors.redAccent : Colors.greenAccent, width: 0.5),
+                                border: Border.all(color: c.isReversed ? Colors.redAccent.withOpacity(0.5) : AppColors.cyanGlow.withOpacity(0.5), width: 1),
                               ),
                               child: Text(
                                 status,
-                                style: TextStyle(color: c.isReversed ? Colors.redAccent : Colors.greenAccent, fontWeight: FontWeight.bold, fontSize: 12),
+                                style: TextStyle(color: c.isReversed ? Colors.redAccent : AppColors.cyanGlow, fontWeight: FontWeight.w600, fontSize: 12),
                               ),
                             ),
-                            const Divider(color: Colors.white24, height: 20),
-                            Text(meaning, style: const TextStyle(fontSize: 14, height: 1.5, color: Colors.white70)),
+                            const Divider(color: Colors.white12, height: 24),
+                            Text(meaning, style: const TextStyle(fontSize: 14, height: 1.6, color: Colors.white70)),
                           ],
                         ),
                       )
@@ -1916,50 +2015,35 @@ class _ReadingScreenState extends State<ReadingScreen> with TickerProviderStateM
             if (showAI)
               Container(
                 margin: const EdgeInsets.only(top: 10, bottom: 20),
-                padding: const EdgeInsets.all(24),
+                padding: const EdgeInsets.all(5),
                 decoration: BoxDecoration(
-                  color: const Color(0xFFFFF8E7).withAlpha(15), 
+                  color: AppColors.glassBg, 
                   borderRadius: BorderRadius.circular(16),
-                  border: Border.all(color: const Color(0xFFC9A84C), width: 1.2),
                   boxShadow: [
-                    BoxShadow(
-                      color: const Color(0xFFC9A84C).withAlpha(51),
-                      blurRadius: 20,
-                      spreadRadius: 4,
-                    ),
+                    BoxShadow(color: AppColors.mysticPurple.withOpacity(0.1), blurRadius: 20, spreadRadius: 2),
                   ],
                 ),
                 child: Stack(
                   children: [
-                    Positioned.fill(
-                      child: CustomPaint(
-                        painter: ScrollBorderPainter(),
-                      ),
-                    ),
+                    Positioned.fill(child: CustomPaint(painter: ScrollBorderPainter())),
                     if (isGenerating)
                       Padding(
                         padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 32),
                         child: Column(
                           children: [
-                            // 自定义魔法阵加载动画
                             AnimatedBuilder(
                               animation: _magicCircleController,
                               builder: (_, child) {
                                 return Transform.rotate(
                                   angle: _magicCircleController.value * 2 * pi,
-                                  child: CustomPaint(
-                                    size: const Size(100, 100),
-                                    painter: _MagicCirclePainter(),
-                                  ),
+                                  child: CustomPaint(size: const Size(100, 100), painter: _MagicCirclePainter()),
                                 );
                               },
                             ),
-                            const SizedBox(height: 10),
+                            const SizedBox(height: 20),
                             Text(
                               widget.lang == AppLanguage.en ? 'Master is writing your reading...' : widget.lang == AppLanguage.ms ? 'Pakar sedang menulis bacaan anda...' : '大师正在撰写指引报告...',
-                              style: const TextStyle(color: Color(0xFFC9A84C), fontSize: 16, shadows: [
-                                Shadow(color: Color(0xFFC9A84C), blurRadius: 8),
-                              ]),
+                              style: const TextStyle(color: AppColors.gold, fontSize: 16, shadows: [Shadow(color: AppColors.goldGlow, blurRadius: 8)]),
                             ),
                             const SizedBox(height: 10),
                             _buildTypewriterText(),
@@ -1969,33 +2053,76 @@ class _ReadingScreenState extends State<ReadingScreen> with TickerProviderStateM
                     else
                       Padding(
                         padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 32),
-                        child: _buildTypewriterText(),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            _buildTypewriterText(),
+                            
+                            // 失败重试按钮 (只有在非生成状态并且遇到错误时才显示)
+                            if (!isGenerating && _isError)
+                              Padding(
+                                padding: const EdgeInsets.only(top: 24),
+                                child: Center(
+                                  child: GlowButton(
+                                    glowColor: AppColors.mysticPurple,
+                                    borderRadius: 20,
+                                    onTap: () {
+                                      AudioManager().playSfx('audio/click.wav');
+                                      _askAI();
+                                    },
+                                    child: Container(
+                                      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+                                      decoration: BoxDecoration(
+                                        color: AppColors.mysticPurple,
+                                        borderRadius: BorderRadius.circular(20),
+                                      ),
+                                      child: Row(
+                                        mainAxisSize: MainAxisSize.min,
+                                        children: [
+                                          const Icon(Icons.refresh, color: Colors.white, size: 20),
+                                          const SizedBox(width: 8),
+                                          Text(
+                                            widget.lang == AppLanguage.en ? 'Retry' 
+                                            : widget.lang == AppLanguage.ms ? 'Cuba Semula' 
+                                            : '重新解读',
+                                            style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 15),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                              )
+                          ],
+                        ),
                       ),
                   ],
                 ),
-              ), // <--- 之前可能就是不小心删掉了这三个括号其中的一个
+              ),
 
-            const SizedBox(height: 90),
+            const SizedBox(height: 100),
           ],
         ),
       ),
 
-      floatingActionButton: isFinished || showAI
+      floatingActionButton: isFinished || showAI || widget.isFromHistory
           ? null
           : GlowButton(
+              glowColor: AppColors.mysticPurple,
               onTap: () {
                 AudioManager().playSfx('audio/magic_start.mp3');
                 _askAI();
               },
               child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 14),
+                padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
                 decoration: BoxDecoration(
-                  gradient: const LinearGradient(colors: [Color(0xFFC9A84C), Color(0xFF8B7500)]),
+                  gradient: const LinearGradient(colors: [Color(0xFF8E54E9), Color(0xFF4776E6)]),
                   borderRadius: BorderRadius.circular(30),
+                  border: Border.all(color: Colors.white.withOpacity(0.2)),
                 ),
                 child: Text(
                   widget.lang == AppLanguage.en ? '✨ Start AI Deep Reading' : widget.lang == AppLanguage.ms ? '✨ Mulakan Bacaan AI Mendalam' : '✨ 开启 AI 深度解牌',
-                  style: const TextStyle(color: Colors.black, fontWeight: FontWeight.bold, fontSize: 16),
+                  style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16, letterSpacing: 1.0),
                 ),
               ),
             ),
@@ -2011,12 +2138,11 @@ class _MagicCirclePainter extends CustomPainter {
     final center = Offset(size.width / 2, size.height / 2);
     final radius = size.width / 2;
     final paint = Paint()
-      ..color = const Color(0xFFC9A84C).withAlpha(153) 
+      ..color = AppColors.mysticPurple.withOpacity(0.7)
       ..style = PaintingStyle.stroke
-      ..strokeWidth = 2;
+      ..strokeWidth = 1.5;
     canvas.drawCircle(center, radius, paint);
     canvas.drawCircle(center, radius * 0.7, paint);
-    // 六芒星
     for (int i = 0; i < 6; i++) {
       final angle = i * pi / 3;
       final dx = center.dx + cos(angle) * radius;
@@ -2028,10 +2154,6 @@ class _MagicCirclePainter extends CustomPainter {
   @override
   bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
 }
-
-// ⬇️ 完整78张塔罗牌数据（多语言）保持不变
-// ... (由于篇幅限制，牌数据部分与原始代码完全相同，此处省略)
-// 请将原始数据完整粘贴至此处。
 
 // ⬇️ 完整78张塔罗牌数据（多语言）
 const List<Map<String, dynamic>> rawTarotData = [

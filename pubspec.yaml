@@ -19,6 +19,8 @@ dependencies:
   firebase_remote_config: ^6.5.1
   audioplayers: ^5.0.0
   google_fonts: ^6.0.0
+  hive: ^2.2.3
+  hive_flutter: ^1.1.0
 
 dev_dependencies:
   flutter_test:
