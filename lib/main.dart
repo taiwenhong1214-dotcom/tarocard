@@ -691,20 +691,22 @@ class _HomeScreenState extends State<HomeScreen> {
     return Scaffold(
       extendBodyBehindAppBar: true,
       appBar: AppBar(
+        // ✅ 左侧放入历史图标
+        leading: IconButton(
+          icon: const Icon(Icons.history, color: AppColors.gold),
+          onPressed: () {
+            Navigator.push(context, _createRoute(HistoryScreen(lang: currentLanguage)));
+          },
+          tooltip: tr(currentLanguage, '历史记录', 'History', 'Sejarah'),
+        ),
         title: Text(tr(currentLanguage, '塔 罗 灵 境', 'Tarot Realm', 'Dunia Tarot'),
             style: GoogleFonts.notoSerifSc(
-              fontSize: 24, fontWeight: FontWeight.bold, letterSpacing: 4, 
-              color: const Color.fromARGB(255, 204, 109, 227), 
+              fontSize: 24, fontWeight: FontWeight.bold, letterSpacing: 4,
+              color: const Color.fromARGB(255, 204, 109, 227),
               shadows: const [Shadow(color: AppColors.goldGlow, blurRadius: 12)]
             )),
+        // ✅ 右侧只保留语言切换和文字标识
         actions: [
-          IconButton(
-            icon: const Icon(Icons.history, color: AppColors.gold),
-            onPressed: () {
-              Navigator.push(context, _createRoute(HistoryScreen(lang: currentLanguage)));
-            },
-            tooltip: tr(currentLanguage, '历史记录', 'History', 'Sejarah'),
-          ),
           PopupMenuButton<AppLanguage>(
             onSelected: (AppLanguage result) => setState(() => currentLanguage = result),
             icon: const Icon(Icons.language, color: AppColors.gold),
