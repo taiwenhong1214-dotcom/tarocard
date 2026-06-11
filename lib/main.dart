@@ -1992,7 +1992,7 @@ class _ReadingScreenState extends State<ReadingScreen> with TickerProviderStateM
     });
     
     _loadingTextTimer?.cancel();
-    _loadingTextTimer = Timer.periodic(const Duration(seconds: 4), (timer) {
+    _loadingTextTimer = Timer.periodic(const Duration(seconds: 7), (timer) {
       if (mounted) {
         setState(() {
           _currentTipIndex = (_currentTipIndex + 1) % tipsZh.length;
