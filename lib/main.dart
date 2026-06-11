@@ -13,29 +13,24 @@ import 'package:hive/hive.dart';
 import 'package:hive_flutter/hive_flutter.dart';
 import 'firebase_options.dart';
 
-// ================= 全局色彩美学配置 (Midnight & Ethereal Gold) =================
+// ================= 全局色彩美学配置 =================
 class AppColors {
-  // 核心主色
-  static const Color gold = Color(0xFFE8C37C);           // 塔罗奢华暗金
-  static const Color mysticPurple = Color(0xFF9E7BFF);   // 灵境神秘紫
-  static const Color cyanGlow = Color(0xFF4DEEEA);       // 幽魂青绿（点缀）
+  static const Color gold = Color(0xFFE8C37C);           
+  static const Color mysticPurple = Color(0xFF9E7BFF);   
+  static const Color cyanGlow = Color(0xFF4DEEEA);       
   
-  // 透明度衍生色
-  static const Color goldDim = Color.fromARGB(153, 158, 91, 185);        // 60% 金
-  static const Color goldGlow = Color.fromARGB(102, 205, 124, 232);       // 40% 金
-  static const Color mysticPurpleDim = Color(0x809E7BFF);// 50% 紫
+  static const Color goldDim = Color.fromARGB(153, 158, 91, 185);        
+  static const Color goldGlow = Color.fromARGB(102, 205, 124, 232);       
+  static const Color mysticPurpleDim = Color(0x809E7BFF);
   
-  // 深空背景
-  static const Color bgTop = Color.fromARGB(34, 103, 83, 138);          // 穹顶午夜靛蓝
-  static const Color bgBottom = Color(0xFF030206);       // 深渊虚无黑
+  static const Color bgTop = Color.fromARGB(34, 103, 83, 138);          
+  static const Color bgBottom = Color(0xFF030206);       
   
-  // 玻璃拟态
-  static const Color glassBg = Color.fromARGB(160, 80, 50, 110);        // 幽邃紫透底
-  static const Color glassBorder = Color.fromARGB(77, 212, 124, 232);    // 30% 金色细边
+  static const Color glassBg = Color.fromARGB(160, 80, 50, 110);        
+  static const Color glassBorder = Color.fromARGB(77, 212, 124, 232);    
   
-  // 卡牌色系
-  static const Color cardBackDark = Color.fromARGB(255, 33, 25, 67);   // 牌背深渊色
-  static const Color cardBackLight = Color.fromARGB(255, 157, 7, 171);  // 牌背紫光色
+  static const Color cardBackDark = Color.fromARGB(255, 33, 25, 67);   
+  static const Color cardBackLight = Color.fromARGB(255, 157, 7, 171);  
 
   static const Color pink = Color.fromARGB(134, 150, 1, 150);
   static const Color selectedTile = Color(0xFFE040FB); 
@@ -44,7 +39,6 @@ class AppColors {
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   
-  // 初始化 Hive 本地数据库
   await Hive.initFlutter();
   Hive.registerAdapter(ReadingRecordAdapter());
   await Hive.openBox<ReadingRecord>('reading_history');
@@ -70,9 +64,11 @@ class AudioManager {
   late AudioPlayer _bgmPlayer;
   late AudioPlayer _sfxPlayer;
   bool _initialized = false;
+  bool _isBgmPlaying = false;
 
   void _init() {
     _bgmPlayer = AudioPlayer();
+    _bgmPlayer.setReleaseMode(ReleaseMode.loop); // BGM 开启循环播放
     _sfxPlayer = AudioPlayer();
     _initialized = true;
   }
@@ -86,13 +82,30 @@ class AudioManager {
     }
   }
 
+  Future<void> playBgm(String path) async {
+    if (!_initialized || _isBgmPlaying) return;
+    try {
+      await _bgmPlayer.play(AssetSource(path));
+      _isBgmPlaying = true;
+    } catch (e) {
+      debugPrint('BGM play error: $e');
+    }
+  }
+
+  void stopBgm() {
+    if (_isBgmPlaying) {
+      _bgmPlayer.stop();
+      _isBgmPlaying = false;
+    }
+  }
+
   void dispose() {
     _bgmPlayer.dispose();
     _sfxPlayer.dispose();
   }
 }
 
-// ================= 升级版粒子背景 =================
+// ================= 粒子背景 =================
 class ParticleBackgroundPainter extends CustomPainter {
   final double time;
   ParticleBackgroundPainter(this.time);
@@ -151,7 +164,7 @@ class _Particle {
   });
 }
 
-// ================= 光丝背景 + 缓慢魔法阵 =================
+// ================= 光丝背景 =================
 class LightThreadsPainter extends CustomPainter {
   final double time;
   LightThreadsPainter(this.time);
@@ -349,8 +362,7 @@ String tr(AppLanguage lang, String zh, String en, String ms) {
   return zh;
 }
 
-// ================= 数据模型与四大经典牌阵配置 =================
-
+// ================= 数据模型 =================
 class SpreadConfig {
   final String nameZh, nameEn, nameMs;
   final List<String> positionsZh, positionsEn, positionsMs;
@@ -447,7 +459,7 @@ class DrawnCard {
   DrawnCard({required this.card, required this.isReversed, required this.positionMeaning});
 }
 
-// 占位模拟数据注入点
+// 占位注入点，假设 rawTarotData 在此可见或在外部定义
 final List<TarotCard> tarotDeck = rawTarotData.map((data) {
   return TarotCard(
     nameZh: data['nameZh'] ?? "", nameEn: data['nameEn'] ?? "", nameMs: data['nameMs'] ?? "",
@@ -458,7 +470,7 @@ final List<TarotCard> tarotDeck = rawTarotData.map((data) {
   );
 }).toList();
 
-// ================= Hive 历史记录模型与序列化 =================
+// ================= Hive 历史记录模型 =================
 class ReadingRecord {
   final String id;
   final int timestamp;
@@ -536,7 +548,6 @@ String formatTimestamp(int ms) {
   return '${dt.year}-${dt.month.toString().padLeft(2, '0')}-${dt.day.toString().padLeft(2, '0')} ${dt.hour.toString().padLeft(2, '0')}:${dt.minute.toString().padLeft(2, '0')}';
 }
 
-// ================= 高级玻璃拟态卡片装饰 =================
 BoxDecoration glassDecoration({Color? borderColor, double borderRadius = 18}) {
   return BoxDecoration(
     color: const Color.fromARGB(255, 19, 5, 43),
@@ -556,7 +567,7 @@ BoxDecoration glassDecoration({Color? borderColor, double borderRadius = 18}) {
   );
 }
 
-// ================= 光晕按钮 (已集成 InkWell 水波纹) =================
+// ================= 光晕按钮 =================
 class GlowButton extends StatefulWidget {
   final Widget child;
   final VoidCallback? onTap;
@@ -657,6 +668,8 @@ class _HomeScreenState extends State<HomeScreen> {
   void initState() {
     super.initState();
     _checkVersion(); 
+    // 🔥 在此处启动背景音乐，文件需位于 assets/audio/bgm.mp3 并在 pubspec.yaml 中声明
+    AudioManager().playBgm('audio/bgm.mp3');
   }
 
   Future<void> _checkVersion() async {
@@ -685,7 +698,6 @@ class _HomeScreenState extends State<HomeScreen> {
               shadows: const [Shadow(color: AppColors.goldGlow, blurRadius: 12)]
             )),
         actions: [
-          // 添加历史记录入口按钮
           IconButton(
             icon: const Icon(Icons.history, color: AppColors.gold),
             onPressed: () {
@@ -904,7 +916,7 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 }
 
-// ================= 新增：历史记录界面 =================
+// ================= 历史记录界面 =================
 class HistoryScreen extends StatelessWidget {
   final AppLanguage lang;
   const HistoryScreen({Key? key, required this.lang}) : super(key: key);
@@ -939,7 +951,6 @@ class HistoryScreen extends StatelessWidget {
               itemBuilder: (ctx, index) {
                 final record = records[index];
                 
-                // 根据保存的 Zh 名字找到原始配置，若找不到则返回默认第一项防崩溃
                 final topic = availableTopics.firstWhere((t) => t.zh == record.topicZh, orElse: () => availableTopics[0]);
                 final spread = availableSpreads.firstWhere((s) => s.nameZh == record.spreadZh, orElse: () => availableSpreads[0]);
                 final savedLang = AppLanguage.values[record.langIndex];
@@ -1000,7 +1011,7 @@ class HistoryScreen extends StatelessWidget {
   }
 }
 
-// ================= 法阵可视化引擎 (幽邃光晕连线) =================
+// ================= 法阵可视化引擎 =================
 class SpreadVisualizer extends StatelessWidget {
   final String spreadName; 
   final List<Widget> cards;
@@ -1276,7 +1287,7 @@ class _TarotCardWidgetState extends State<TarotCardWidget> with TickerProviderSt
     
     _glowBurstController = AnimationController(vsync: this, duration: const Duration(milliseconds: 800));
     _glowBurstAnimation = Tween<double>(begin: 0.0, end: 1.0).animate(CurvedAnimation(parent: _glowBurstController, curve: Curves.easeOut));
-    _backGlowController = AnimationController(vsync: this, duration: const Duration(seconds: 4))..repeat();
+    _backGlowController = AnimationController(vsync: this, duration: const Duration(seconds: 7))..repeat();
   }
 
   void _flipCard() {
@@ -1692,6 +1703,193 @@ class ScrollBorderPainter extends CustomPainter {
   bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
 }
 
+// ================= 三语冷知识文案数据 =================
+const List<String> tipsZh = [
+  '💡 塔罗牌最早出现在 15 世纪的意大利，最初是贵族玩的纸牌游戏。',
+  '🌟 大阿卡纳共 22 张，被称为“灵魂的旅程”。',
+  '🃏 逆位牌不一定代表负面，有时是能量被压抑或需要内省。',
+  '🔮 占卜前深呼吸三次，有助于清空杂念，提高直觉。',
+  '🌕 月亮牌经常在失眠、焦虑时出现，提醒你面对内心的恐惧。',
+  '⚡ 高塔牌虽然看起来可怕，但它其实是解放——推倒虚假的才能重建真实。',
+  '🌞 太阳牌是塔罗中最积极的牌之一，预示着成功、喜悦和生命力。',
+  '🗡️ 宝剑牌组代表思维、沟通和挑战，宝剑三的心碎图案是塔罗中最具冲击力的画面之一。',
+  '🍷 圣杯牌组与情感、关系和直觉相关，圣杯一代表新感情的开始。',
+  '🪄 权杖牌组象征行动、创意和激情，权杖八表示事情正在飞速发展。',
+  '🪙 星币牌组对应物质世界、金钱和工作，星币九显示一个人独立享受成果。',
+  '🧙 魔术师牌显示你有能力将想法变为现实，是行动的时刻。',
+  '🦉 女祭司代表直觉和潜意识，她提醒你向内看，答案就在你心里。',
+  '👑 皇帝牌象征权威、结构和纪律，有时也代表一个重要的男性形象。',
+  '❤️ 恋人牌不仅指爱情，还代表重要的人生选择和价值观的抉择。',
+  '💀 死神牌不是真的死亡，而是结束与新生，旧的不去新的不来。',
+  '⏳ 倒吊人鼓励你换个角度看世界，自愿的暂停是为了更深的领悟。',
+  '🌌 星星牌是希望的象征，出现在风暴之后，给你疗愈和灵感。',
+  '⚖️ 正义牌提醒你：种什么因得什么果，现在是做正确决定的时候。',
+  '🔄 命运之轮表示变化不可避免，好运即将到来，顺其自然就好。',
+  '🌙 每晚睡前抽一张牌，可以记录梦境与直觉的变化。',
+  '📜 塔罗的历史融合了占星、炼金术和卡巴拉等神秘学传统。',
+  '🎴 标准的塔罗牌共有 78 张：22 张大阿尔卡纳和 56 张小阿尔卡纳。',
+  '🤫 别人替你抽的牌，往往能反映你自己没注意到的盲点。',
+  '✨ 连续三次抽到同一张牌，通常表示宇宙在敲你的门，要特别留意。',
+];
+
+const List<String> tipsEn = [
+  '💡 Tarot first appeared in 15th-century Italy, originally as a card game for nobles.',
+  '🌟 The 22 Major Arcana cards are known as the "Soul\'s Journey".',
+  '🃏 Reversed cards aren\'t always negative; sometimes they represent blocked energy or a need for introspection.',
+  '🔮 Taking three deep breaths before a reading helps clear your mind and boost intuition.',
+  '🌕 The Moon card often appears during times of insomnia or anxiety, reminding you to face inner fears.',
+  '⚡ The Tower looks scary, but it\'s about liberation—tearing down the false to rebuild the true.',
+  '🌞 The Sun is one of the most positive cards, foretelling success, joy, and vitality.',
+  '🗡️ The Suit of Swords represents thoughts, communication, and challenges.',
+  '🍷 The Suit of Cups is linked to emotions, relationships, and intuition.',
+  '🪄 The Suit of Wands symbolizes action, creativity, and passion. The 8 of Wands means rapid progress.',
+  '🪙 The Suit of Pentacles relates to the material world, money, and work.',
+  '🧙 The Magician shows you have the tools to turn ideas into reality; it\'s time for action.',
+  '🦉 The High Priestess represents intuition and the subconscious. The answers are within you.',
+  '👑 The Emperor symbolizes authority, structure, and discipline.',
+  '❤️ The Lovers isn\'t just about romance; it\'s also about major life choices and values.',
+  '💀 Death rarely means physical death. It means an ending and a new beginning.',
+  '⏳ The Hanged Man encourages you to look from a new perspective.',
+  '🌌 The Star is a symbol of hope, bringing healing and inspiration after a storm.',
+  '⚖️ Justice reminds you: you reap what you sow. Now is the time to make the right decision.',
+  '🔄 The Wheel of Fortune shows change is inevitable. Good luck is coming, go with the flow.',
+  '🌙 Drawing one card every night before bed can help track your dreams and intuition.',
+  '📜 Tarot\'s history blends astrology, alchemy, Kabbalah, and other occult traditions.',
+  '🎴 A standard Tarot deck has 78 cards: 22 Major Arcana and 56 Minor Arcana.',
+  '🤫 Cards drawn by someone else often reveal blind spots you didn\'t notice.',
+  '✨ Drawing the same card three times in a row usually means the universe is knocking on your door. Pay attention!',
+];
+
+const List<String> tipsMs = [
+  '💡 Tarot pertama kali muncul di Itali pada abad ke-15, asalnya sebagai permainan kad untuk bangsawan.',
+  '🌟 22 kad Arcana Utama dikenali sebagai "Perjalanan Jiwa".',
+  '🃏 Kad terbalik tidak semestinya negatif; kadang-kadang ia mewakili keperluan untuk merenung diri.',
+  '🔮 Menarik nafas dalam tiga kali sebelum bacaan membantu mengosongkan minda dan meningkatkan intuisi.',
+  '🌕 Kad Bulan sering muncul ketika insomnia atau kebimbangan.',
+  '⚡ Kad Menara nampak menakutkan, tetapi ia tentang pembebasan—meruntuhkan yang palsu untuk membina yang benar.',
+  '🌞 Kad Matahari meramalkan kejayaan, kegembiraan, dan tenaga hayat.',
+  '🗡️ Sut Pedang mewakili pemikiran, komunikasi, dan cabaran.',
+  '🍷 Sut Piala dikaitkan dengan emosi, hubungan, dan intuisi. Piala Satu bermaksud cinta baru.',
+  '🪄 Sut Tongkat melambangkan tindakan, kreativiti, dan keghairahan.',
+  '🪙 Sut Syiling (Pentacles) berkaitan dengan dunia material, wang, dan pekerjaan.',
+  '🧙 Magis (The Magician) menunjukkan anda mempunyai kemampuan untuk menjadikan idea kenyataan.',
+  '🦉 Paderi Tinggi (The High Priestess) mewakili intuisi dan bawah sedar. Jawapannya ada dalam diri anda.',
+  '👑 Maharaja (The Emperor) melambangkan kuasa, struktur, dan disiplin.',
+  '❤️ Kekasih (The Lovers) bukan hanya tentang percintaan; ia juga tentang pilihan hidup dan nilai utama.',
+  '💀 Maut (Death) jarang bermaksud kematian fizikal. Ia bermaksud pengakhiran dan permulaan baru.',
+  '⏳ Orang Tergantung (The Hanged Man) menggalakkan anda melihat dari perspektif baru.',
+  '🌌 Bintang (The Star) adalah simbol harapan, membawa penyembuhan selepas ribut.',
+  '⚖️ Keadilan (Justice) mengingatkan anda: apa yang anda semai, itu yang anda tuai.',
+  '🔄 Roda Nasib (Wheel of Fortune) menunjukkan perubahan pasti berlaku. Ikut sahaja alirannya.',
+  '🌙 Menarik satu kad setiap malam sebelum tidur boleh menjejaki mimpi dan intuisi anda.',
+  '📜 Sejarah Tarot menggabungkan astrologi, alkimia, Kabbalah, dan tradisi mistik yang lain.',
+  '🎴 Dek Tarot standard mempunyai 78 kad: 22 Arcana Utama dan 56 Arcana Kecil.',
+  '🤫 Kad yang ditarik oleh orang lain sering mendedahkan titik buta yang anda tidak perasan.',
+  '✨ Menarik kad yang sama tiga kali berturut-turut biasanya bermaksud alam semesta sedang memberi petanda!',
+];
+
+// ================= 水晶球交互组件 (涟漪特效) =================
+class InteractiveMagicCircle extends StatefulWidget {
+  final Animation<double> rotation;
+  const InteractiveMagicCircle({Key? key, required this.rotation}) : super(key: key);
+  
+  @override
+  _InteractiveMagicCircleState createState() => _InteractiveMagicCircleState();
+}
+
+class _InteractiveMagicCircleState extends State<InteractiveMagicCircle> with TickerProviderStateMixin {
+  final List<_Ripple> ripples = [];
+
+  void _addRipple(Offset position) {
+    final controller = AnimationController(vsync: this, duration: const Duration(milliseconds: 800));
+    final ripple = _Ripple(position, controller);
+    setState(() => ripples.add(ripple));
+    controller.forward().then((_) {
+      if (mounted) {
+        setState(() => ripples.remove(ripple));
+      }
+      controller.dispose();
+    });
+    // 使用 click.wav 或准备一个空灵水滴音效 ripple.wav
+    AudioManager().playSfx('audio/click.wav'); 
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTapDown: (details) => _addRipple(details.localPosition),
+      child: Container(
+        width: 140, 
+        height: 140,
+        color: Colors.transparent, // 确保透明区域也能接收点击事件
+        child: Stack(
+          alignment: Alignment.center,
+          children: [
+            AnimatedBuilder(
+              animation: widget.rotation,
+              builder: (_, __) {
+                return Transform.rotate(
+                  angle: widget.rotation.value * 2 * pi,
+                  child: CustomPaint(size: const Size(100, 100), painter: _MagicCirclePainter()),
+                );
+              },
+            ),
+            ...ripples.map((r) => AnimatedBuilder(
+              animation: r.controller,
+              builder: (_, __) {
+                final radius = r.controller.value * 60;
+                final opacity = 1.0 - r.controller.value;
+                return Positioned(
+                  left: r.position.dx - radius,
+                  top: r.position.dy - radius,
+                  child: Container(
+                    width: radius * 2,
+                    height: radius * 2,
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      border: Border.all(color: AppColors.cyanGlow.withOpacity(opacity), width: 2),
+                      color: AppColors.cyanGlow.withOpacity(opacity * 0.3),
+                    ),
+                  ),
+                );
+              },
+            )).toList(),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _Ripple {
+  Offset position;
+  AnimationController controller;
+  _Ripple(this.position, this.controller);
+}
+
+// 魔法阵绘制
+class _MagicCirclePainter extends CustomPainter {
+  @override
+  void paint(Canvas canvas, Size size) {
+    final center = Offset(size.width / 2, size.height / 2);
+    final radius = size.width / 2;
+    final paint = Paint()
+      ..color = AppColors.mysticPurple.withOpacity(0.7)
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 1.5;
+    canvas.drawCircle(center, radius, paint);
+    canvas.drawCircle(center, radius * 0.7, paint);
+    for (int i = 0; i < 6; i++) {
+      final angle = i * pi / 3;
+      final dx = center.dx + cos(angle) * radius;
+      final dy = center.dy + sin(angle) * radius;
+      canvas.drawLine(center, Offset(dx, dy), paint);
+    }
+  }
+  @override
+  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
+}
+
 // ================= 4. 解牌结果页面 =================
 class ReadingScreen extends StatefulWidget {
   final List<DrawnCard> cards;
@@ -1699,7 +1897,6 @@ class ReadingScreen extends StatefulWidget {
   final SpreadConfig spread; 
   final AppLanguage lang;
   
-  // 新增的历史相关参数
   final bool isFromHistory;
   final String? historyAiResponse;
 
@@ -1722,17 +1919,21 @@ class _ReadingScreenState extends State<ReadingScreen> with TickerProviderStateM
   bool isGenerating = false;
   bool showAI = false;
   bool isFinished = false;
-  bool _isError = false; // 新增：标识是否遇到 API 请求失败
+  bool _isError = false; 
 
   final String _proxyUrl = 'https://tai-taro.vercel.app/api/gemini';
+
   late AnimationController _magicCircleController;
+  
+  // 修复了定时器引发的报错，设为了可空类型并在 dispose 前稳妥取消
+  Timer? _loadingTextTimer;
+  int _currentTipIndex = 0;
 
   @override
   void initState() {
     super.initState();
     _magicCircleController = AnimationController(vsync: this, duration: const Duration(seconds: 4))..repeat();
 
-    // 如果是通过历史记录进入，则直接展示结果
     if (widget.isFromHistory) {
       showAI = true;
       isGenerating = false;
@@ -1743,8 +1944,15 @@ class _ReadingScreenState extends State<ReadingScreen> with TickerProviderStateM
 
   @override
   void dispose() {
+    _loadingTextTimer?.cancel();
     _magicCircleController.dispose();
     super.dispose();
+  }
+  
+  String _getTip(AppLanguage lang, int index) {
+    if (lang == AppLanguage.en) return tipsEn[index % tipsEn.length];
+    if (lang == AppLanguage.ms) return tipsMs[index % tipsMs.length];
+    return tipsZh[index % tipsZh.length];
   }
 
   Future<void> _saveToHistory() async {
@@ -1761,7 +1969,7 @@ class _ReadingScreenState extends State<ReadingScreen> with TickerProviderStateM
         aiResponse: aiResponse,
         langIndex: widget.lang.index,
       );
-      await box.put(record.id, record);   // 已添加 await
+      await box.put(record.id, record);  
     } catch (e) {
       debugPrint('Save history failed: $e');
     }
@@ -1771,12 +1979,23 @@ class _ReadingScreenState extends State<ReadingScreen> with TickerProviderStateM
     setState(() {
       showAI = true;
       isGenerating = true;
-      _isError = false; // 每次请求时重置错误状态
+      _isError = false; 
+      // 开启随机冷知识轮播定时器
+      _currentTipIndex = Random().nextInt(tipsZh.length);
       aiResponse = widget.lang == AppLanguage.en
         ? "🔮 Connecting to the oracle, your tarot master is preparing the reading...\n\n"
         : widget.lang == AppLanguage.ms 
         ? "🔮 Menyambung ke alam ramalan, pakar tarot anda sedang menyediakan bacaan...\n\n"
         : "🔮 灵界连结中，占卜师正在为你综合解读...\n\n";
+    });
+    
+    _loadingTextTimer?.cancel();
+    _loadingTextTimer = Timer.periodic(const Duration(seconds: 4), (timer) {
+      if (mounted) {
+        setState(() {
+          _currentTipIndex = (_currentTipIndex + 1) % tipsZh.length;
+        });
+      }
     });
     
     String prompt = "";
@@ -1919,7 +2138,6 @@ class _ReadingScreenState extends State<ReadingScreen> with TickerProviderStateM
           );
           _isError = false;
         });
-        // 成功获取解牌后保存至历史记录
         _saveToHistory();
       } else {
         setState(() {
@@ -1934,6 +2152,7 @@ class _ReadingScreenState extends State<ReadingScreen> with TickerProviderStateM
         _isError = true;
       });
     } finally {
+      _loadingTextTimer?.cancel();
       if (mounted) setState(() => isGenerating = false);
     }
   }
@@ -1955,7 +2174,6 @@ class _ReadingScreenState extends State<ReadingScreen> with TickerProviderStateM
   Widget _buildTypewriterText() {
     if (aiResponse.isEmpty) return const SizedBox();
     
-    // 如果是历史记录，直接展示完整 Markdown 排版，跳过打字动画
     return MarkdownBody(
       data: aiResponse,
       styleSheet: _mdStyleSheet,
@@ -2008,7 +2226,6 @@ class _ReadingScreenState extends State<ReadingScreen> with TickerProviderStateM
         child: ListView(
           padding: const EdgeInsets.all(16),
           children: [
-            // 牌阵预览
             Container(
               height: widget.spread.nameZh.contains('凯尔特') ? 380 : 250,
               padding: const EdgeInsets.symmetric(vertical: 10),
@@ -2017,7 +2234,6 @@ class _ReadingScreenState extends State<ReadingScreen> with TickerProviderStateM
               child: SpreadVisualizer(spreadName: widget.spread.nameZh, cards: miniMapCards), 
             ),
 
-            // 每张牌详解
             ...widget.cards.map((c) {
               final status = c.isReversed 
                   ? (widget.lang == AppLanguage.en ? "Reversed" : widget.lang == AppLanguage.ms ? "Terbalik" : "逆位") 
@@ -2083,7 +2299,6 @@ class _ReadingScreenState extends State<ReadingScreen> with TickerProviderStateM
               );
             }).toList(),
 
-            // AI 解读区域 (卷轴面板)
             if (showAI)
               Container(
                 margin: const EdgeInsets.only(top: 10, bottom: 20),
@@ -2103,20 +2318,27 @@ class _ReadingScreenState extends State<ReadingScreen> with TickerProviderStateM
                         padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 32),
                         child: Column(
                           children: [
-                            AnimatedBuilder(
-                              animation: _magicCircleController,
-                              builder: (_, child) {
-                                return Transform.rotate(
-                                  angle: _magicCircleController.value * 2 * pi,
-                                  child: CustomPaint(size: const Size(100, 100), painter: _MagicCirclePainter()),
-                                );
-                              },
-                            ),
+                            // 替换为可交互的水晶球
+                            InteractiveMagicCircle(rotation: _magicCircleController),
+                            
                             const SizedBox(height: 20),
                             Text(
                               widget.lang == AppLanguage.en ? 'Master is writing your reading...' : widget.lang == AppLanguage.ms ? 'Pakar sedang menulis bacaan anda...' : '大师正在撰写指引报告...',
                               style: const TextStyle(color: AppColors.gold, fontSize: 16, shadows: [Shadow(color: AppColors.goldGlow, blurRadius: 8)]),
                             ),
+                            const SizedBox(height: 15),
+                            
+                            // 带动画切换的塔罗小知识
+                            AnimatedSwitcher(
+                              duration: const Duration(milliseconds: 800),
+                              child: Text(
+                                _getTip(widget.lang, _currentTipIndex),
+                                key: ValueKey<int>(_currentTipIndex),
+                                style: const TextStyle(color: Colors.white70, fontSize: 13, fontStyle: FontStyle.italic, height: 1.5),
+                                textAlign: TextAlign.center,
+                              ),
+                            ),
+                            
                             const SizedBox(height: 10),
                             _buildTypewriterText(),
                           ],
@@ -2130,7 +2352,6 @@ class _ReadingScreenState extends State<ReadingScreen> with TickerProviderStateM
                           children: [
                             _buildTypewriterText(),
                             
-                            // 失败重试按钮 (只有在非生成状态并且遇到错误时才显示)
                             if (!isGenerating && _isError)
                               Padding(
                                 padding: const EdgeInsets.only(top: 24),
@@ -2201,30 +2422,6 @@ class _ReadingScreenState extends State<ReadingScreen> with TickerProviderStateM
       floatingActionButtonLocation: FloatingActionButtonLocation.centerFloat,
     );
   }
-}
-
-// 魔法阵绘制
-class _MagicCirclePainter extends CustomPainter {
-  @override
-  void paint(Canvas canvas, Size size) {
-    final center = Offset(size.width / 2, size.height / 2);
-    final radius = size.width / 2;
-    final paint = Paint()
-      ..color = AppColors.mysticPurple.withOpacity(0.7)
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 1.5;
-    canvas.drawCircle(center, radius, paint);
-    canvas.drawCircle(center, radius * 0.7, paint);
-    for (int i = 0; i < 6; i++) {
-      final angle = i * pi / 3;
-      final dx = center.dx + cos(angle) * radius;
-      final dy = center.dy + sin(angle) * radius;
-      canvas.drawLine(center, Offset(dx, dy), paint);
-    }
-  }
-
-  @override
-  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
 }
 
 // ⬇️ 完整78张塔罗牌数据（多语言）
