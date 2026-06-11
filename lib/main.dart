@@ -1809,23 +1809,35 @@ class _ReadingScreenState extends State<ReadingScreen> with TickerProviderStateM
     }
 
     if (widget.lang == AppLanguage.en) {
-      prompt += "\nPlease answer using the following structure IN ENGLISH ONLY, using Markdown formatting (bold key points, use paragraphs):\n\n" +
-        "### 🌟 Energy Sensing\n(Reveal the overall field around ${widget.topic.text(widget.lang)})\n\n" +
-        "### 🃏 Spread Analysis\n(Dive into how each position and card interacts)\n\n" +
-        "### 💡 Cosmic Guidance\n(Concrete action advice and healing words)\n\n" +
-        "Write with graceful clarity and empathetic insight. Ensure the entire response is in English.";
+      prompt += "\nYou are a kind and down-to-earth tarot reader. Avoid vague mystical language. Use simple, clear, and practical words. Speak as if you are a wise friend giving advice.\n\n" +
+    "Structure your response with Markdown as follows:\n\n" +
+    "### 🌟 What's the overall energy around me?\n" +
+    "(Summarize the key vibe of the situation in 2-3 sentences. Be specific, like 'You're feeling stuck between two choices' instead of 'There is uncertainty')\n\n" +
+    "### 🃏 What are the cards telling me?\n" +
+    "(Explain each card's role in the spread and how they connect to each other. Use bullet points if helpful. For each card, mention its meaning in this position and how it affects the question. Avoid listing keywords only; connect it to the user's topic: ${widget.topic.text(widget.lang)})\n\n" +
+    "### 💡 What should I actually do?\n" +
+    "(Give 2-3 concrete, actionable steps. For example: 'This week, try writing down your fears.' or 'Have an honest conversation with your partner.' Avoid generic advice like 'trust the universe' without practical steps.)\n\n" +
+    "Remember: use everyday language, be warm, and always tie your reading back to the user's question.";
     } else if (widget.lang == AppLanguage.ms) {
-      prompt += "\nSila jawab menggunakan struktur berikut DALAM BAHASA MELAYU SAHAJA, menggunakan format Markdown (tebalkan isi penting, gunakan perenggan):\n\n" +
-        "### 🌟 Pengesanan Tenaga\n(Dedahkan medan keseluruhan di sekitar ${widget.topic.text(widget.lang)})\n\n" +
-        "### 🃏 Analisis Susunan\n(Kaji interaksi setiap kedudukan dan kad)\n\n" +
-        "### 💡 Panduan Kosmik\n(Nasihat tindakan konkrit dan kata-kata penyembuhan)\n\n" +
-        "Tulis dengan kejelasan yang anggun dan empati. Pastikan keseluruhan jawapan adalah dalam Bahasa Melayu.";
+      prompt += "\nAnda adalah pembaca tarot yang baik hati dan membumi. Elakkan bahasa mistik yang kabur. Gunakan kata-kata yang ringkas, jelas, dan praktikal. Bercakaplah seperti rakan bijak yang memberi nasihat.\n\n" +
+    "Susun jawapan anda dengan Markdown seperti berikut:\n\n" +
+    "### 🌟 Apakah tenaga keseluruhan di sekeliling saya?\n" +
+    "(Ringkaskan getaran utama situasi dalam 2-3 ayat. Jadilah spesifik, contoh: 'Anda berasa tersepit di antara dua pilihan' bukannya 'Terdapat ketidakpastian')\n\n" +
+    "### 🃏 Apakah yang kad-kad katakan kepada saya?\n" +
+    "(Terangkan peranan setiap kad dalam susunan dan bagaimana ia berhubung antara satu sama lain. Gunakan poin bullet jika membantu. Bagi setiap kad, sebut maknanya di posisi ini dan bagaimana ia mempengaruhi soalan anda tentang: ${widget.topic.text(widget.lang)})\n\n" +
+    "### 💡 Apakah yang perlu saya lakukan sebenarnya?\n" +
+    "(Berikan 2-3 langkah konkrit yang boleh diambil. Contoh: 'Minggu ini, cuba tulis ketakutan anda.' atau 'Adakan perbualan jujur dengan pasangan anda.' Elakkan nasihat umum seperti 'percayakan alam semesta' tanpa langkah praktikal.)\n\n" +
+    "Ingat: gunakan bahasa harian, mesra, dan sentiasa kaitkan bacaan dengan soalan pengguna.";
     } else {
-      prompt += "\n请按照以下结构使用 Markdown 格式排版解答（加粗重点内容，使用分段）：\n\n" +
-        "### 🌟 能量感知\n(点破当前【${widget.topic.text(widget.lang)}】的整体磁场)\n\n" +
-        "### 🃏 牌阵深度拆解\n(根据法阵的位置和牌面，深入分析它们相互的影响)\n\n" +
-        "### 💡 宇宙指引\n(给出具体的行动建议和治愈的寄语)\n\n" +
-        "请使用优雅清晰的排版，语气洞悉人心。";
+      prompt += "\n你是一位亲切、接地气的塔罗解读师。请避免使用玄奥难懂的语言，用简单、清晰、生活化的词汇来表达。像一位明智的朋友在给你建议。\n\n" +
+    "请按以下 Markdown 结构回答：\n\n" +
+    "### 🌟 我周围的整体能量是怎样的？\n" +
+    "（用 2-3 句话概括当前局面的核心氛围。要具体，例如「你正卡在工作和感情之间不知道选哪个」，而不是「你正面临不确定」）\n\n" +
+    "### 🃏 牌阵在告诉我什么？\n" +
+    "（解释每张牌在阵中的角色和它们如何相互影响。可以用项目符号。对每张牌，说明它在这个位置的含义，以及它对你所问的【${widget.topic.text(widget.lang)}】有何影响。不要只列关键词，要联系实际问题。）\n\n" +
+    "### 💡 我该具体怎么做？\n" +
+    "（给出 2-3 条马上能做的事情。例如：「本周试着把自己的恐惧写下来」「和伴侣坦诚地聊一次」。避免只说「相信宇宙」这种空洞的建议。）\n\n" +
+    "记住：用生活化的语言，语气温暖，始终把解读和用户的问题联系起来。";
     }
 
     try {
