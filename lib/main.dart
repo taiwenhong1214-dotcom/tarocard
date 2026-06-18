@@ -11,29 +11,34 @@ import 'package:audioplayers/audioplayers.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:hive/hive.dart';
 import 'package:hive_flutter/hive_flutter.dart';
+import 'package:sensors_plus/sensors_plus.dart';
 import 'firebase_options.dart';
 
 // ================= 全局色彩美学配置 =================
 class AppColors {
+  // Mystic palette
   static const Color gold = Color(0xFFE8C37C);           
   static const Color mysticPurple = Color(0xFF9E7BFF);   
   static const Color cyanGlow = Color(0xFF4DEEEA);       
-  
   static const Color goldDim = Color.fromARGB(153, 158, 91, 185);        
   static const Color goldGlow = Color.fromARGB(102, 205, 124, 232);       
   static const Color mysticPurpleDim = Color(0x809E7BFF);
-  
   static const Color bgTop = Color.fromARGB(34, 103, 83, 138);          
   static const Color bgBottom = Color(0xFF030206);       
-  
   static const Color glassBg = Color.fromARGB(160, 80, 50, 110);        
   static const Color glassBorder = Color.fromARGB(77, 212, 124, 232);    
-  
   static const Color cardBackDark = Color.fromARGB(255, 33, 25, 67);   
   static const Color cardBackLight = Color.fromARGB(255, 157, 7, 171);  
-
   static const Color pink = Color.fromARGB(134, 150, 1, 150);
-  static const Color selectedTile = Color(0xFFE040FB); 
+  static const Color selectedTile = Color(0xFFE040FB);
+
+  // TDesign palette
+  static const Color primary = Color(0xFF0052D9);
+  static const Color textPrimary = Color(0xFFE8E8E8);
+  static const Color textSecondary = Color(0xFFB0B0B0);
+  static const Color textTertiary = Color(0xFF808080);
+  static const Color bgCard = Color(0xFF1E1E2E);
+  static const Color bgElevated = Color(0xFF2A2A3E);
 }
 
 Future<void> main() async {
@@ -41,7 +46,9 @@ Future<void> main() async {
   
   await Hive.initFlutter();
   Hive.registerAdapter(ReadingRecordAdapter());
+  Hive.registerAdapter(GachaStateAdapter());
   await Hive.openBox<ReadingRecord>('reading_history');
+  await Hive.openBox<GachaState>('gacha_state');
 
   try {
     await Firebase.initializeApp(
@@ -222,6 +229,30 @@ class LightThreadsPainter extends CustomPainter {
   bool shouldRepaint(covariant LightThreadsPainter oldDelegate) => oldDelegate.time != time;
 }
 
+// ================= 烛光暖色覆盖 =================
+class CandlelightPainter extends CustomPainter {
+  final double time;
+  CandlelightPainter(this.time);
+  @override
+  void paint(Canvas canvas, Size size) {
+    final flicker = 0.85 + 0.15 * sin(time * 2.3) * sin(time * 1.7 + 1);
+    final gradient = RadialGradient(
+      center: const Alignment(0.3, -0.5),
+      radius: 1.2,
+      colors: [
+        Color.fromRGBO(255, 180, 80, (0.035 * flicker).clamp(0.0, 0.06)),
+        Color.fromRGBO(255, 140, 40, (0.015 * flicker).clamp(0.0, 0.03)),
+        Colors.transparent,
+      ],
+      stops: const [0.0, 0.4, 1.0],
+    );
+    final paint = Paint()..shader = gradient.createShader(Offset.zero & size);
+    canvas.drawRect(Offset.zero & size, paint);
+  }
+  @override
+  bool shouldRepaint(covariant CandlelightPainter oldDelegate) => oldDelegate.time != time;
+}
+
 class AnimatedBackground extends StatefulWidget {
   final Widget child;
   const AnimatedBackground({Key? key, required this.child}) : super(key: key);
@@ -270,10 +301,45 @@ class _AnimatedBackgroundState extends State<AnimatedBackground> with SingleTick
             ),
             Positioned.fill(child: CustomPaint(painter: ParticleBackgroundPainter(t))),
             Positioned.fill(child: CustomPaint(painter: LightThreadsPainter(t))),
+            Positioned.fill(child: CustomPaint(painter: CandlelightPainter(t))),
             widget.child,
           ],
         );
       },
+    );
+  }
+}
+
+// ================= 陀螺仪卡牌组件 =================
+class GyroCard extends StatefulWidget {
+  final Widget child;
+  final double maxAngle;
+  const GyroCard({super.key, required this.child, this.maxAngle = 12});
+  @override
+  State<GyroCard> createState() => _GyroCardState();
+}
+class _GyroCardState extends State<GyroCard> {
+  double _tiltX = 0, _tiltY = 0;
+  @override
+  void initState() {
+    super.initState();
+    gyroscopeEventStream().listen((e) {
+      if (!mounted) return;
+      setState(() {
+        _tiltX = (e.y * 8).clamp(-widget.maxAngle, widget.maxAngle);
+        _tiltY = (e.x * 8).clamp(-widget.maxAngle, widget.maxAngle);
+      });
+    });
+  }
+  @override
+  Widget build(BuildContext context) {
+    return Transform(
+      alignment: Alignment.center,
+      transform: Matrix4.identity()
+        ..setEntry(3, 2, 0.001)
+        ..rotateX(_tiltX * pi / 180)
+        ..rotateY(_tiltY * pi / 180),
+      child: widget.child,
     );
   }
 }
@@ -341,7 +407,7 @@ class TarotApp extends StatelessWidget {
         cardColor: const Color(0xFF161026),
         dialogBackgroundColor: const Color(0xFF1A132F),
       ),
-      home: const HomeScreen(),
+      home: const SplashScreen(),
       debugShowCheckedModeBanner: false,
       builder: (context, child) {
         return Scaffold(
@@ -355,6 +421,60 @@ class TarotApp extends StatelessWidget {
 
 // ================= 全局语言支持 =================
 enum AppLanguage { zh, en, ms }
+
+enum TarotScene { firstRead, followUp, daily, review, optimize }
+
+// ================= 月相系统 =================
+enum MoonPhase {
+  newMoon, waxingCrescent, firstQuarter, waxingGibbous,
+  fullMoon, waningGibbous, lastQuarter, waningCrescent;
+  
+  String text(AppLanguage lang) {
+    if (lang == AppLanguage.en) return _moonNamesEn[index];
+    if (lang == AppLanguage.ms) return _moonNamesMs[index];
+    return _moonNamesZh[index];
+  }
+  String icon() => _moonIcons[index];
+}
+const _moonNamesZh = ['新月', '蛾眉月', '上弦月', '盈凸月', '满月', '亏凸月', '下弦月', '残月'];
+const _moonNamesEn = ['New Moon', 'Waxing Crescent', 'First Quarter', 'Waxing Gibbous', 'Full Moon', 'Waning Gibbous', 'Last Quarter', 'Waning Crescent'];
+const _moonNamesMs = ['Anak Bulan', 'Bulan Sabit', 'Suku Pertama', 'Bulan Cembung', 'Bulan Penuh', 'Bulan Cembung', 'Suku Akhir', 'Bulan Sabit Tua'];
+const _moonIcons = ['🌑', '🌒', '🌓', '🌔', '🌕', '🌖', '🌗', '🌘'];
+
+MoonPhase getCurrentMoonPhase() {
+  final now = DateTime.now();
+  final knownNewMoon = DateTime(2024, 1, 11); // approximate known new moon
+  final daysSince = now.difference(knownNewMoon).inDays;
+  final lunarCycle = 29.53058867;
+  final phase = (daysSince % lunarCycle) / lunarCycle;
+  final index = (phase * 8).floor();
+  return MoonPhase.values[index];
+}
+
+const Map<String, Map<String, String>> majorArcanaAstrology = {
+  '愚人': {'planet': '天王星', 'zodiac': '水瓶座', 'element': '风', 'rune': 'ᚱ', 'number': '0-开端'},
+  '魔术师': {'planet': '水星', 'zodiac': '双子座/处女座', 'element': '风', 'rune': 'ᚨ', 'number': '1-创造'},
+  '女祭司': {'planet': '月亮', 'zodiac': '双鱼座', 'element': '水', 'rune': 'ᛒ', 'number': '2-直觉'},
+  '皇后': {'planet': '金星', 'zodiac': '金牛座', 'element': '地', 'rune': 'ᚠ', 'number': '3-丰饶'},
+  '皇帝': {'planet': '火星', 'zodiac': '白羊座', 'element': '火', 'rune': 'ᛟ', 'number': '4-权威'},
+  '教皇': {'planet': '木星', 'zodiac': '射手座', 'element': '地', 'rune': 'ᛉ', 'number': '5-传承'},
+  '恋人': {'planet': '水星', 'zodiac': '双子座', 'element': '风', 'rune': 'ᚷ', 'number': '6-选择'},
+  '战车': {'planet': '火星', 'zodiac': '巨蟹座', 'element': '水', 'rune': 'ᚲ', 'number': '7-胜利'},
+  '力量': {'planet': '太阳', 'zodiac': '狮子座', 'element': '火', 'rune': 'ᛋ', 'number': '8-力量'},
+  '隐士': {'planet': '天王星', 'zodiac': '处女座', 'element': '地', 'rune': 'ᛇ', 'number': '9-内省'},
+  '命运之轮': {'planet': '木星', 'zodiac': '射手座', 'element': '火', 'rune': 'ᛃ', 'number': '10-循环'},
+  '正义': {'planet': '金星', 'zodiac': '天秤座', 'element': '风', 'rune': 'ᛚ', 'number': '11-平衡'},
+  '倒吊人': {'planet': '海王星', 'zodiac': '双鱼座', 'element': '水', 'rune': 'ᛗ', 'number': '12-臣服'},
+  '死神': {'planet': '冥王星', 'zodiac': '天蝎座', 'element': '火', 'rune': 'ᚾ', 'number': '13-蜕变'},
+  '节制': {'planet': '射手座', 'zodiac': '射手座', 'element': '火', 'rune': 'ᛞ', 'number': '14-调和'},
+  '恶魔': {'planet': '土星', 'zodiac': '摩羯座', 'element': '地', 'rune': 'ᛏ', 'number': '15-执念'},
+  '高塔': {'planet': '火星', 'zodiac': '白羊座', 'element': '火', 'rune': 'ᚹ', 'number': '16-崩塌'},
+  '星星': {'planet': '天王星', 'zodiac': '水瓶座', 'element': '风', 'rune': 'ᛁ', 'number': '17-希望'},
+  '月亮': {'planet': '月亮', 'zodiac': '双鱼座', 'element': '水', 'rune': 'ᛖ', 'number': '18-幻象'},
+  '太阳': {'planet': '太阳', 'zodiac': '狮子座', 'element': '火', 'rune': 'ᛊ', 'number': '19-喜悦'},
+  '审判': {'planet': '冥王星', 'zodiac': '天蝎座', 'element': '水', 'rune': 'ᚱ', 'number': '20-觉醒'},
+  '世界': {'planet': '土星', 'zodiac': '摩羯座', 'element': '地', 'rune': 'ᛝ', 'number': '21-圆满'},
+};
 
 String tr(AppLanguage lang, String zh, String en, String ms) {
   if (lang == AppLanguage.en) return en;
@@ -479,11 +599,12 @@ class ReadingRecord {
   final String cardsJson;
   final String aiResponse;
   final int langIndex;
+  final String? moodTag;
 
   ReadingRecord({
     required this.id, required this.timestamp, required this.topicZh,
     required this.spreadZh, required this.cardsJson, required this.aiResponse,
-    required this.langIndex,
+    required this.langIndex, this.moodTag,
   });
 }
 
@@ -493,14 +614,22 @@ class ReadingRecordAdapter extends TypeAdapter<ReadingRecord> {
 
   @override
   ReadingRecord read(BinaryReader reader) {
+    final id = reader.readString();
+    final timestamp = reader.readInt();
+    final topicZh = reader.readString();
+    final spreadZh = reader.readString();
+    final cardsJson = reader.readString();
+    final aiResponse = reader.readString();
+    final langIndex = reader.readInt();
+    String? moodTag;
+    try {
+      final tag = reader.readString();
+      if (tag.isNotEmpty) moodTag = tag;
+    } catch (_) {}
     return ReadingRecord(
-      id: reader.readString(),
-      timestamp: reader.readInt(),
-      topicZh: reader.readString(),
-      spreadZh: reader.readString(),
-      cardsJson: reader.readString(),
-      aiResponse: reader.readString(),
-      langIndex: reader.readInt(),
+      id: id, timestamp: timestamp, topicZh: topicZh,
+      spreadZh: spreadZh, cardsJson: cardsJson, aiResponse: aiResponse,
+      langIndex: langIndex, moodTag: moodTag,
     );
   }
 
@@ -513,6 +642,33 @@ class ReadingRecordAdapter extends TypeAdapter<ReadingRecord> {
     writer.writeString(obj.cardsJson);
     writer.writeString(obj.aiResponse);
     writer.writeInt(obj.langIndex);
+    writer.writeString(obj.moodTag ?? '');
+  }
+}
+
+class GachaState {
+  int pullsSinceLastSSR;
+  DateTime lastFreePull;
+  List<String> ownedCardNames;
+  GachaState({this.pullsSinceLastSSR = 0, DateTime? lastFreePull, List<String>? ownedCardNames})
+      : lastFreePull = lastFreePull ?? DateTime(2000),
+        ownedCardNames = ownedCardNames ?? [];
+}
+
+class GachaStateAdapter extends TypeAdapter<GachaState> {
+  @override
+  final int typeId = 1;
+  @override
+  GachaState read(BinaryReader reader) => GachaState(
+    pullsSinceLastSSR: reader.readInt(),
+    lastFreePull: DateTime.fromMillisecondsSinceEpoch(reader.readInt()),
+    ownedCardNames: reader.readStringList(),
+  );
+  @override
+  void write(BinaryWriter writer, GachaState obj) {
+    writer.writeInt(obj.pullsSinceLastSSR);
+    writer.writeInt(obj.lastFreePull.millisecondsSinceEpoch);
+    writer.writeStringList(obj.ownedCardNames);
   }
 }
 
@@ -565,6 +721,107 @@ BoxDecoration glassDecoration({Color? borderColor, double borderRadius = 18}) {
       ),
     ],
   );
+}
+
+// ================= 抽卡系统 (Gacha) =================
+const int _gachaPityThreshold = 30;
+const double _ssrRate = 0.10;
+const double _srRate = 0.30;
+
+class CardSkinDefinition {
+  final String id;
+  final String nameZh, nameEn, nameMs;
+  final String assetPrefix;
+  const CardSkinDefinition({required this.id, required this.nameZh, required this.nameEn, required this.nameMs, required this.assetPrefix});
+  String name(AppLanguage lang) => tr(lang, nameZh, nameEn, nameMs);
+}
+const List<CardSkinDefinition> cardSkins = [
+  CardSkinDefinition(id: 'classic', nameZh: '经典', nameEn: 'Classic', nameMs: 'Klasik', assetPrefix: ''),
+  CardSkinDefinition(id: 'cat', nameZh: '猫猫', nameEn: 'Cat', nameMs: 'Kucing', assetPrefix: 'cat_'),
+  CardSkinDefinition(id: 'cyber', nameZh: '赛博', nameEn: 'Cyber', nameMs: 'Cyber', assetPrefix: 'cyber_'),
+];
+
+class GachaEngine {
+  int pullsSinceLastSSR;
+  DateTime lastFreePull;
+  Map<String, int> ownedCards;
+
+  GachaEngine({this.pullsSinceLastSSR = 0, DateTime? lastFreePull, Map<String, int>? ownedCards})
+      : lastFreePull = lastFreePull ?? DateTime(2000),
+        ownedCards = ownedCards ?? {};
+
+  bool get canFreePull => DateTime.now().difference(lastFreePull).inDays >= 1;
+
+  TarotCard pull() {
+    pullsSinceLastSSR++;
+    if (pullsSinceLastSSR >= _gachaPityThreshold) {
+      pullsSinceLastSSR = 0;
+      return _randomMajor();
+    }
+    final r = Random().nextDouble();
+    if (r < _ssrRate) { pullsSinceLastSSR = 0; return _randomMajor(); }
+    if (r < _ssrRate + _srRate) return _randomMinor();
+    return tarotDeck[Random().nextInt(tarotDeck.length)];
+  }
+
+  TarotCard _randomMajor() => tarotDeck.where((c) => c.arcana == '大阿尔卡纳').toList()[Random().nextInt(22)];
+  TarotCard _randomMinor() => tarotDeck.where((c) => c.arcana != '大阿尔卡纳').toList()[Random().nextInt(56)];
+
+  String rarityLabel(TarotCard c) => c.arcana == '大阿尔卡纳' ? 'SSR' : (Random().nextBool() ? 'SR' : 'R');
+  Color rarityColor(String r) => r == 'SSR' ? const Color(0xFFFFD700) : (r == 'SR' ? const Color(0xFF9E7BFF) : const Color(0xFF80CBC4));
+}
+
+// ================= 卡牌维度组件 =================
+class CardDimensionWidget extends StatelessWidget {
+  final String cardName;
+  const CardDimensionWidget({Key? key, required this.cardName}) : super(key: key);
+  @override
+  Widget build(BuildContext context) {
+    final astro = majorArcanaAstrology[cardName];
+    if (astro == null) return const SizedBox.shrink();
+    final chips = [astro['element'], astro['planet'], astro['zodiac'], astro['rune']].whereType<String>().toList();
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 4),
+      child: Wrap(
+        spacing: 6, runSpacing: 4,
+        children: chips.map((c) => Container(
+          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+          decoration: BoxDecoration(
+            color: AppColors.primary.withOpacity(0.15),
+            borderRadius: BorderRadius.circular(10),
+            border: Border.all(color: AppColors.primary.withOpacity(0.2)),
+          ),
+          child: Text(c, style: const TextStyle(fontSize: 11, color: AppColors.primary)),
+        )).toList(),
+      ),
+    );
+  }
+}
+
+// ================= 月相指示器 =================
+class MoonPhaseIndicator extends StatelessWidget {
+  final AppLanguage lang;
+  const MoonPhaseIndicator({Key? key, required this.lang}) : super(key: key);
+  @override
+  Widget build(BuildContext context) {
+    final phase = getCurrentMoonPhase();
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      decoration: BoxDecoration(
+        color: AppColors.glassBg,
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: Colors.white.withOpacity(0.08)),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text(phase.icon(), style: const TextStyle(fontSize: 16)),
+          const SizedBox(width: 6),
+          Text(phase.text(lang), style: const TextStyle(color: AppColors.textSecondary, fontSize: 12)),
+        ],
+      ),
+    );
+  }
 }
 
 // ================= 光晕按钮 =================
@@ -651,6 +908,305 @@ class _GlowButtonState extends State<GlowButton> with SingleTickerProviderStateM
   }
 }
 
+// ================= 开屏动画 =================
+class SplashScreen extends StatefulWidget {
+  const SplashScreen({Key? key}) : super(key: key);
+  @override
+  _SplashScreenState createState() => _SplashScreenState();
+}
+
+class _SplashScreenState extends State<SplashScreen> with TickerProviderStateMixin {
+  late AnimationController _fadeController;
+  late AnimationController _pulseController;
+  late AnimationController _starController;
+  late Animation<double> _fadeIn;
+  late Animation<double> _titleFade;
+  late Animation<double> _subtitleFade;
+  late Animation<double> _pulse;
+
+  @override
+  void initState() {
+    super.initState();
+    
+    _fadeController = AnimationController(
+      vsync: this, duration: const Duration(milliseconds: 2500),
+    );
+    
+    _pulseController = AnimationController(
+      vsync: this, duration: const Duration(milliseconds: 1500),
+    )..repeat(reverse: true);
+    
+    _starController = AnimationController(
+      vsync: this, duration: const Duration(seconds: 20),
+    )..repeat();
+
+    _fadeIn = Tween<double>(begin: 0.0, end: 1.0).animate(
+      CurvedAnimation(parent: _fadeController, curve: const Interval(0.0, 0.5, curve: Curves.easeOut)),
+    );
+    _titleFade = Tween<double>(begin: 0.0, end: 1.0).animate(
+      CurvedAnimation(parent: _fadeController, curve: const Interval(0.3, 0.7, curve: Curves.easeOut)),
+    );
+    _subtitleFade = Tween<double>(begin: 0.0, end: 1.0).animate(
+      CurvedAnimation(parent: _fadeController, curve: const Interval(0.5, 0.9, curve: Curves.easeOut)),
+    );
+    _pulse = Tween<double>(begin: 0.95, end: 1.05).animate(
+      CurvedAnimation(parent: _pulseController, curve: Curves.easeInOut),
+    );
+
+    _fadeController.forward();
+    
+    Future.delayed(const Duration(milliseconds: 3200), () {
+      if (mounted) {
+        Navigator.of(context).pushReplacement(
+          PageRouteBuilder(
+            pageBuilder: (context, animation, secondaryAnimation) => const HomeScreen(),
+            transitionsBuilder: (context, animation, secondaryAnimation, child) {
+              return FadeTransition(opacity: animation, child: child);
+            },
+            transitionDuration: const Duration(milliseconds: 800),
+          ),
+        );
+      }
+    });
+  }
+
+  @override
+  void dispose() {
+    _fadeController.dispose();
+    _pulseController.dispose();
+    _starController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: Colors.black,
+      body: AnimatedBuilder(
+        animation: Listenable.merge([_fadeController, _pulseController, _starController]),
+        builder: (context, _) {
+          return Stack(
+            children: [
+              // 深色渐变背景
+              Positioned.fill(
+                child: Container(
+                  decoration: const BoxDecoration(
+                    gradient: RadialGradient(
+                      center: Alignment(0.0, -0.2),
+                      radius: 1.5,
+                      colors: [
+                        Color(0xFF1A0A2E),
+                        Color(0xFF0D0518),
+                        Color(0xFF030206),
+                      ],
+                      stops: [0.0, 0.5, 1.0],
+                    ),
+                  ),
+                ),
+              ),
+              
+              // 星辰粒子背景
+              Positioned.fill(
+                child: CustomPaint(
+                  painter: _SplashStarPainter(_starController.value * 20),
+                ),
+              ),
+              
+              // 中央光晕
+              Center(
+                child: Opacity(
+                  opacity: _fadeIn.value * 0.3,
+                  child: Container(
+                    width: 300,
+                    height: 300,
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      gradient: RadialGradient(
+                        colors: [
+                          AppColors.gold.withOpacity(0.15),
+                          AppColors.mysticPurple.withOpacity(0.08),
+                          Colors.transparent,
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+              
+              // 主内容
+              Center(
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    // App Icon / Logo
+                    Opacity(
+                      opacity: _fadeIn.value,
+                      child: Transform.scale(
+                        scale: _pulse.value,
+                        child: Container(
+                          width: 140,
+                          height: 140,
+                          decoration: BoxDecoration(
+                            borderRadius: BorderRadius.circular(30),
+                            boxShadow: [
+                              BoxShadow(
+                                color: AppColors.gold.withOpacity(0.3 * _fadeIn.value),
+                                blurRadius: 30,
+                                spreadRadius: 5,
+                              ),
+                              BoxShadow(
+                                color: AppColors.mysticPurple.withOpacity(0.2 * _fadeIn.value),
+                                blurRadius: 50,
+                                spreadRadius: 10,
+                              ),
+                            ],
+                          ),
+                          child: ClipRRect(
+                            borderRadius: BorderRadius.circular(30),
+                            child: Image.asset(
+                              'assets/images/app_icon.png',
+                              fit: BoxFit.cover,
+                              errorBuilder: (ctx, err, stack) => Container(
+                                decoration: BoxDecoration(
+                                  borderRadius: BorderRadius.circular(30),
+                                  gradient: const LinearGradient(
+                                    begin: Alignment.topLeft,
+                                    end: Alignment.bottomRight,
+                                    colors: [Color(0xFF2D1B69), Color(0xFF1A0A2E)],
+                                  ),
+                                ),
+                                child: const Center(
+                                  child: Text('🔮', style: TextStyle(fontSize: 60)),
+                                ),
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                    
+                    const SizedBox(height: 36),
+                    
+                    // 标题
+                    Opacity(
+                      opacity: _titleFade.value,
+                      child: Transform.translate(
+                        offset: Offset(0, 20 * (1 - _titleFade.value)),
+                        child: Text(
+                          '塔 罗 灵 境',
+                          style: GoogleFonts.notoSerifSc(
+                            fontSize: 32,
+                            fontWeight: FontWeight.bold,
+                            letterSpacing: 8,
+                            color: AppColors.gold,
+                            shadows: [
+                              Shadow(color: AppColors.goldGlow, blurRadius: 15),
+                              Shadow(color: AppColors.mysticPurple.withOpacity(0.5), blurRadius: 30),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ),
+                    
+                    const SizedBox(height: 12),
+                    
+                    // 副标题
+                    Opacity(
+                      opacity: _subtitleFade.value,
+                      child: Transform.translate(
+                        offset: Offset(0, 15 * (1 - _subtitleFade.value)),
+                        child: Text(
+                          'T A R O T   R E A L M',
+                          style: GoogleFonts.notoSerifSc(
+                            fontSize: 14,
+                            fontWeight: FontWeight.w300,
+                            letterSpacing: 6,
+                            color: AppColors.mysticPurple.withOpacity(0.8),
+                          ),
+                        ),
+                      ),
+                    ),
+                    
+                    const SizedBox(height: 48),
+                    
+                    // 加载指示
+                    Opacity(
+                      opacity: _subtitleFade.value * 0.6,
+                      child: SizedBox(
+                        width: 24,
+                        height: 24,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 1.5,
+                          valueColor: AlwaysStoppedAnimation<Color>(
+                            AppColors.gold.withOpacity(0.5),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              
+              // 底部版本号
+              Positioned(
+                bottom: 40,
+                left: 0,
+                right: 0,
+                child: Opacity(
+                  opacity: _subtitleFade.value * 0.4,
+                  child: const Text(
+                    'v2.1.0',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(
+                      color: Colors.white24,
+                      fontSize: 12,
+                      letterSpacing: 2,
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          );
+        },
+      ),
+    );
+  }
+}
+
+// 开屏星辰粒子画笔
+class _SplashStarPainter extends CustomPainter {
+  final double time;
+  _SplashStarPainter(this.time);
+  final _rand = Random(88);
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    if (size.width <= 0 || size.height <= 0) return;
+    final paint = Paint()..style = PaintingStyle.fill;
+    
+    for (int i = 0; i < 80; i++) {
+      final x = _rand.nextDouble() * size.width;
+      final y = _rand.nextDouble() * size.height;
+      final r = _rand.nextDouble() * 1.8 + 0.3;
+      final speed = _rand.nextDouble() * 0.5 + 0.2;
+      final phase = _rand.nextDouble() * pi * 2;
+      
+      final twinkle = (sin(time * speed + phase) * 0.5 + 0.5);
+      final opacity = twinkle * 0.6 + 0.1;
+      
+      final isGold = i % 5 == 0;
+      paint.color = isGold 
+          ? Color.fromRGBO(232, 195, 124, opacity.clamp(0.0, 1.0))
+          : Color.fromRGBO(158, 123, 255, (opacity * 0.7).clamp(0.0, 1.0));
+      
+      canvas.drawCircle(Offset(x, y), r * twinkle, paint);
+    }
+  }
+
+  @override
+  bool shouldRepaint(covariant _SplashStarPainter oldDelegate) => oldDelegate.time != time;
+}
+
 // ================= 1. 首页 =================
 class HomeScreen extends StatefulWidget {
   const HomeScreen({Key? key}) : super(key: key);
@@ -663,6 +1219,7 @@ class _HomeScreenState extends State<HomeScreen> {
   Topic selectedTopic = availableTopics[0];
   SpreadConfig selectedSpread = availableSpreads[0];
   final String currentAppVersion = '2.1.0';
+  final TextEditingController _questionController = TextEditingController();
 
   @override
   void initState() {
@@ -670,6 +1227,19 @@ class _HomeScreenState extends State<HomeScreen> {
     _checkVersion(); 
     // 🔥 在此处启动背景音乐，文件需位于 assets/audio/bgm.mp3 并在 pubspec.yaml 中声明
     AudioManager().playBgm('audio/bgm.mp3');
+  }
+
+  void dispose() {
+    _questionController.dispose();
+    super.dispose();
+  }
+
+  void _openReview() {
+    Navigator.push(context, _createRoute(ReadingScreen(
+      cards: [], topic: selectedTopic, spread: selectedSpread,
+      lang: currentLanguage, scene: TarotScene.review,
+      userQuestion: _questionController.text.isNotEmpty ? _questionController.text : null,
+    )));
   }
 
   Future<void> _checkVersion() async {
@@ -740,27 +1310,14 @@ class _HomeScreenState extends State<HomeScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                const Center(child: Icon(Icons.auto_awesome, size: 50, color: AppColors.gold)),
-                const SizedBox(height: 10),
-                Text(tr(currentLanguage, '开启你的占卜结界', 'Open your divination realm', 'Buka alam tenung nasib anda'),
-                    textAlign: TextAlign.center,
-                    style: GoogleFonts.notoSerifSc(fontSize: 16, color: Colors.white70, letterSpacing: 1.5)),
-                const SizedBox(height: 40),
-                
-                Row(
-                  children: [
-                    const Icon(Icons.category, color: AppColors.mysticPurple, size: 20),
-                    const SizedBox(width: 8),
-                    Text(tr(currentLanguage, '你想占卜什么？', 'What would you like to ask?', 'Apa yang anda ingin tanya?'),
-                        style: GoogleFonts.notoSerifSc(
-                          fontSize: 18, color: AppColors.gold, fontWeight: FontWeight.bold, 
-                          shadows: const [Shadow(color: AppColors.goldGlow, blurRadius: 6)]
-                        )),
-                  ],
-                ),
-                const SizedBox(height: 16),
+                const SizedBox(height: 8),
+                Text(tr(currentLanguage, '选择主题', 'Choose Topic', 'Pilih Topik'),
+                    style: const TextStyle(
+                      fontSize: 14, color: AppColors.textSecondary, fontWeight: FontWeight.w500, letterSpacing: 0.5
+                    )),
+                const SizedBox(height: 12),
                 Wrap(
-                  spacing: 12, runSpacing: 12,
+                  spacing: 8, runSpacing: 8,
                   children: availableTopics.map((topic) {
                     final isSelected = selectedTopic == topic;
                     return GestureDetector(
@@ -769,45 +1326,30 @@ class _HomeScreenState extends State<HomeScreen> {
                         AudioManager().playSfx('audio/click.wav');
                       },
                       child: AnimatedContainer(
-                        duration: const Duration(milliseconds: 300),
-                        padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 12),
+                        duration: const Duration(milliseconds: 200),
+                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
                         decoration: BoxDecoration(
-                          color: isSelected ? const Color.fromARGB(255, 123, 2, 115) : AppColors.glassBg,
-                          borderRadius: BorderRadius.circular(30),
+                          color: isSelected ? AppColors.primary.withOpacity(0.2) : AppColors.glassBg,
+                          borderRadius: BorderRadius.circular(20),
                           border: Border.all(
-                            color: isSelected ? AppColors.gold : Colors.white10,
-                            width: 1.2,
-                          ),
-                          boxShadow: isSelected ? [
-                            BoxShadow(color: AppColors.gold.withOpacity(0.3), blurRadius: 12, spreadRadius: 1)
-                          ] : [],
-                        ),
-                        child: Text(
-                          topic.text(currentLanguage),
-                          style: TextStyle(
-                            color: isSelected ? Colors.white : const Color.fromARGB(246, 253, 252, 252),
-                            fontSize: 15, fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
-                            letterSpacing: 0.5,
+                            color: isSelected ? AppColors.primary : Colors.white.withOpacity(0.08),
                           ),
                         ),
+                        child: Text(topic.text(currentLanguage),
+                            style: TextStyle(
+                              color: isSelected ? AppColors.primary : AppColors.textSecondary,
+                              fontSize: 14, fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
+                            )),
                       ),
                     );
                   }).toList(),
                 ),
-                const SizedBox(height: 45),
-
-                Row(
-                  children: [
-                    const Icon(Icons.dashboard_customize, color: AppColors.mysticPurple, size: 20),
-                    const SizedBox(width: 8),
-                    Text(tr(currentLanguage, '请选择灵力法阵', 'Select a spread', 'Sila pilih susunan kad'),
-                        style: GoogleFonts.notoSerifSc(
-                          fontSize: 18, color: AppColors.gold, fontWeight: FontWeight.bold, 
-                          shadows: const [Shadow(color: AppColors.goldGlow, blurRadius: 6)]
-                        )),
-                  ],
-                ),
-                const SizedBox(height: 16),
+                const SizedBox(height: 24),
+                Text(tr(currentLanguage, '选择牌阵', 'Select Spread', 'Pilih Susunan'),
+                    style: const TextStyle(
+                      fontSize: 14, color: AppColors.textSecondary, fontWeight: FontWeight.w500, letterSpacing: 0.5
+                    )),
+                const SizedBox(height: 12),
                 ...availableSpreads.map((spread) {
                   final isSelected = selectedSpread == spread;
                   return GestureDetector(
@@ -816,72 +1358,122 @@ class _HomeScreenState extends State<HomeScreen> {
                       AudioManager().playSfx('audio/click.wav');
                     },
                     child: AnimatedContainer(
-                      duration: const Duration(milliseconds: 300),
-                      margin: const EdgeInsets.only(bottom: 16),
-                      padding: const EdgeInsets.all(20),
-                      decoration: glassDecoration(
-                        borderColor: isSelected ? AppColors.gold : Colors.white12,
-                      ).copyWith(
-                        color: isSelected ? AppColors.pink : AppColors.glassBg,
-                        boxShadow: isSelected ? [
-                          BoxShadow(color: AppColors.pink, blurRadius: 15, spreadRadius: 0)
-                        ] : const [BoxShadow(color: Color(0x33000000), blurRadius: 10, offset: Offset(0, 4))],
+                      duration: const Duration(milliseconds: 200),
+                      margin: const EdgeInsets.only(bottom: 10),
+                      padding: const EdgeInsets.all(14),
+                      decoration: BoxDecoration(
+                        color: isSelected ? AppColors.primary.withOpacity(0.15) : AppColors.glassBg,
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(
+                          color: isSelected ? AppColors.primary.withOpacity(0.4) : Colors.white.withOpacity(0.08),
+                        ),
                       ),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
+                      child: Row(
                         children: [
-                          Row(
-                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                            children: [
-                              Text(spread.name(currentLanguage),
-                                  style: TextStyle(
-                                      fontSize: 18, fontWeight: FontWeight.bold,
-                                      color: isSelected ? AppColors.gold : Colors.white,
-                                      shadows: isSelected ? const [Shadow(color: AppColors.goldGlow, blurRadius: 8)] : []
-                                  )),
-                              if (isSelected)
-                                const Icon(Icons.check_circle, color: AppColors.gold, size: 22)
-                            ],
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(spread.name(currentLanguage),
+                                    style: TextStyle(
+                                        fontSize: 15, fontWeight: FontWeight.w600,
+                                        color: isSelected ? AppColors.textPrimary : AppColors.textSecondary)),
+                                const SizedBox(height: 4),
+                                Text(spread.description(currentLanguage),
+                                    style: TextStyle(
+                                        fontSize: 13, height: 1.5,
+                                        color: AppColors.textTertiary)),
+                              ],
+                            ),
                           ),
-                          const SizedBox(height: 10),
-                          Text(spread.description(currentLanguage),
-                              style: TextStyle(
-                                  fontSize: 14, height: 1.6,
-                                  color: isSelected ? Colors.white70 : Colors.white54)),
+                          if (isSelected)
+                            const Icon(Icons.check_circle, color: AppColors.primary, size: 18)
                         ],
                       ),
                     ),
                   );
                 }).toList(),
-
-                const SizedBox(height: 45),
-
-                GlowButton(
-                  glowColor: AppColors.mysticPurple,
+                const SizedBox(height: 24),
+                TextField(
+                  controller: _questionController,
+                  maxLines: 1,
+                  textInputAction: TextInputAction.go,
+                  style: const TextStyle(color: AppColors.textPrimary, fontSize: 14, height: 1.4),
+                  decoration: InputDecoration(
+                    hintText: tr(currentLanguage, '输入你的问题（可选）', 'Your question (optional)', 'Soalan anda (pilihan)'),
+                    hintStyle: TextStyle(color: AppColors.textTertiary, fontSize: 14),
+                    filled: true,
+                    fillColor: AppColors.bgCard,
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                      borderSide: BorderSide.none,
+                    ),
+                    contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                    prefixIcon: Icon(Icons.edit_note_rounded, color: AppColors.textTertiary, size: 20),
+                  ),
+                  onSubmitted: (_) {
+                    AudioManager().playSfx('audio/magic_start.mp3');
+                    Navigator.push(context, _createRoute(RitualScreen(
+                      topic: selectedTopic, spread: selectedSpread,
+                      lang: currentLanguage,
+                      userQuestion: _questionController.text.isNotEmpty ? _questionController.text : null,
+                    )));
+                  },
+                ),
+                const SizedBox(height: 20),
+                _buildActionButton(
+                  icon: Icons.touch_app_rounded,
+                  label: tr(currentLanguage, '线上虚拟抽牌', 'Virtual Draw', 'Cabutan Maya'),
+                  colors: const [AppColors.primary, Color(0xFF3366FF)],
                   onTap: () {
                     AudioManager().playSfx('audio/magic_start.mp3');
-                    Navigator.push(context, _createRoute(VirtualDrawScreen(topic: selectedTopic, spread: selectedSpread, lang: currentLanguage)));
+                    Navigator.push(context, _createRoute(RitualScreen(topic: selectedTopic, spread: selectedSpread, lang: currentLanguage, userQuestion: _questionController.text.isNotEmpty ? _questionController.text : null)));
                   },
-                  child: _buildActionButton(
-                    icon: Icons.touch_app,
-                    label: tr(currentLanguage, '线上虚拟抽牌 (3D翻牌)', 'Virtual draw (3D flip)', 'Cabutan Maya (Balikan 3D)'),
-                    colors: const [Color(0xFF8E54E9), Color(0xFF4776E6)],
-                  ),
                 ),
-                const SizedBox(height: 16),
-                GlowButton(
-                  glowColor: const Color(0xFF283593),
+                const SizedBox(height: 10),
+                _buildActionButton(
+                  icon: Icons.view_module_rounded,
+                  label: tr(currentLanguage, '自主选牌录入', 'Manual Selection', 'Pilihan Manual'),
+                  colors: [AppColors.textTertiary, AppColors.textSecondary],
                   onTap: () {
                     AudioManager().playSfx('audio/magic_start.mp3');
-                    Navigator.push(context, _createRoute(ManualDrawScreen(topic: selectedTopic, spread: selectedSpread, lang: currentLanguage)));
+                    Navigator.push(context, _createRoute(ManualDrawScreen(topic: selectedTopic, spread: selectedSpread, lang: currentLanguage, userQuestion: _questionController.text.isNotEmpty ? _questionController.text : null)));
                   },
-                  child: _buildActionButton(
-                    icon: Icons.view_module,
-                    label: tr(currentLanguage, '现实自主选牌 (手动录入)', 'Manual card entry', 'Pilihan Kad Manual'),
-                    colors: const [Color(0xFF3949AB), Color(0xFF1A237E)], 
-                  ),
                 ),
-                const SizedBox(height: 50),
+                const SizedBox(height: 24),
+                Row(
+                  children: [
+                    Expanded(child: _buildSmallButton(
+                      icon: Icons.auto_awesome_rounded,
+                      label: tr(currentLanguage, '每日指引', 'Daily', 'Harian'),
+                      onTap: () {
+                        Navigator.push(context, _createRoute(ReadingScreen(
+                          cards: [], topic: selectedTopic, spread: selectedSpread,
+                          lang: currentLanguage, scene: TarotScene.daily,
+                        )));
+                      },
+                    )),
+                    const SizedBox(width: 10),
+                    Expanded(child: _buildSmallButton(
+                      icon: Icons.history_rounded,
+                      label: tr(currentLanguage, '运势复盘', 'Review', 'Semakan'),
+                      onTap: () => _openReview(),
+                    )),
+                    const SizedBox(width: 10),
+                    Expanded(child: _buildSmallButton(
+                      icon: Icons.casino_rounded,
+                      label: tr(currentLanguage, '抽卡', 'Gacha', 'Gacha'),
+                      onTap: () => Navigator.push(context, _createRoute(GachaScreen(lang: currentLanguage))),
+                    )),
+                    const SizedBox(width: 10),
+                    Expanded(child: _buildSmallButton(
+                      icon: Icons.collections_bookmark_rounded,
+                      label: tr(currentLanguage, '图鉴', 'Cards', 'Kad'),
+                      onTap: () => Navigator.push(context, _createRoute(CollectionScreen(lang: currentLanguage))),
+                    )),
+                  ],
+                ),
+                const SizedBox(height: 32),
               ],
             ),
           ),
@@ -890,32 +1482,259 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  Widget _buildActionButton({required IconData icon, required String label, required List<Color> colors}) {
-    return Container(
-      height: 60,
-      decoration: BoxDecoration(
-        gradient: LinearGradient(colors: colors, begin: Alignment.topLeft, end: Alignment.bottomRight),
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: Colors.white.withOpacity(0.15), width: 1),
-      ),
-      child: Center(
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(icon, color: Colors.white, size: 24),
-            const SizedBox(width: 12),
-            Text(
-              label,
-              style: const TextStyle(
-                fontSize: 17, color: Colors.white, fontWeight: FontWeight.w600, letterSpacing: 1.2,
-                shadows: [Shadow(color: Colors.black45, blurRadius: 6, offset: Offset(0, 2))],
+  Widget _buildActionButton({required IconData icon, required String label, required List<Color> colors, VoidCallback? onTap}) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        height: 52,
+        decoration: BoxDecoration(
+          gradient: LinearGradient(colors: colors, begin: Alignment.topLeft, end: Alignment.bottomRight),
+          borderRadius: BorderRadius.circular(12),
+        ),
+        child: Center(
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(icon, color: Colors.white, size: 20),
+              const SizedBox(width: 8),
+              Text(
+                label,
+                style: const TextStyle(
+                  fontSize: 15, color: Colors.white, fontWeight: FontWeight.w600, letterSpacing: 0.5,
+                ),
               ),
-            ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildSmallButton({required IconData icon, required String label, required VoidCallback onTap}) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+        decoration: BoxDecoration(
+          color: AppColors.glassBg,
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(color: Colors.white.withOpacity(0.08)),
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(icon, color: AppColors.textSecondary, size: 18),
+            const SizedBox(height: 4),
+            Text(label, style: const TextStyle(color: AppColors.textSecondary, fontSize: 11, fontWeight: FontWeight.w500)),
           ],
         ),
       ),
     );
   }
+}
+
+// ================= 仪式翻牌界面 =================
+class RitualScreen extends StatefulWidget {
+  final Topic topic;
+  final SpreadConfig spread;
+  final AppLanguage lang;
+  final String? userQuestion;
+  const RitualScreen({Key? key, required this.topic, required this.spread, required this.lang, this.userQuestion}) : super(key: key);
+  @override
+  _RitualScreenState createState() => _RitualScreenState();
+}
+class _RitualScreenState extends State<RitualScreen> with TickerProviderStateMixin {
+  late AnimationController _flyCtrl;
+  late List<Offset> _cardOffsets;
+  final List<_RitualCardData> _cards = [];
+  final List<AnimationController> _flipCtrls = [];
+  int _currentFlipIndex = -1;
+  bool _allRevealed = false;
+
+  @override
+  void initState() {
+    super.initState();
+    final deck = List<TarotCard>.from(tarotDeck)..shuffle();
+    final count = widget.spread.positionsZh.length;
+    final positions = widget.spread.positions(widget.lang);
+    for (int i = 0; i < count; i++) {
+      _cards.add(_RitualCardData(
+        card: deck[i],
+        isReversed: Random().nextBool(),
+        positionMeaning: positions[i],
+      ));
+      _flipCtrls.add(AnimationController(vsync: this, duration: const Duration(milliseconds: 500)));
+    }
+    _cardOffsets = List.generate(count, (_) => Offset(-200.0, Random().nextDouble() * 600));
+    _flyCtrl = AnimationController(vsync: this, duration: const Duration(seconds: 4));
+    _flyCtrl.addStatusListener((s) {
+      if (s == AnimationStatus.completed) _startReveal();
+    });
+    _flyCtrl.addListener(() => setState(() {
+      for (int i = 0; i < count; i++) {
+        final t = (_flyCtrl.value * 1.4 - i * 0.15).clamp(0.0, 1.0);
+        final x = -200 + (320 + i * 45.0) * (1 - pow(1 - t, 3));
+        final y = 300 + sin(t * pi + i * 0.5) * 40;
+        _cardOffsets[i] = Offset(x, y);
+      }
+    }));
+    _flyCtrl.forward();
+  }
+
+  void _startReveal() {
+    _revealNext(0);
+  }
+
+  void _revealNext(int i) {
+    if (i >= _flipCtrls.length) {
+      setState(() => _allRevealed = true);
+      return;
+    }
+    setState(() => _currentFlipIndex = i);
+    _flipCtrls[i].forward().then((_) {
+      AudioManager().playSfx('audio/card_flip.mp3');
+      Future.delayed(const Duration(milliseconds: 400), () => _revealNext(i + 1));
+    });
+  }
+
+  @override
+  void dispose() {
+    _flyCtrl.dispose();
+    for (final c in _flipCtrls) c.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final count = _cards.length;
+    final positions = widget.spread.positions(widget.lang);
+    return Scaffold(
+      extendBodyBehindAppBar: true,
+      appBar: AppBar(backgroundColor: Colors.transparent, elevation: 0,
+        title: Text(tr(widget.lang, '仪式开始', 'Ritual Begins', 'Ritual Bermula'))),
+      body: Container(
+        decoration: const BoxDecoration(
+          gradient: LinearGradient(begin: Alignment.topCenter, end: Alignment.bottomCenter,
+            colors: [AppColors.bgTop, AppColors.bgBottom]),
+        ),
+        child: Stack(
+          children: [
+            ...List.generate(count, (i) {
+              final isFaceUp = _flipCtrls[i].value >= 0.5;
+              return Positioned(
+                left: _cardOffsets[i].dx, top: _cardOffsets[i].dy,
+                child: Transform.rotate(
+                  angle: sin(_flyCtrl.value * pi * 2 + i) * 0.2,
+                  child: SizedBox(
+                    width: 60, height: 100,
+                    child: Stack(
+                      children: [
+                        // Card back (hidden when face up)
+                        AnimatedOpacity(
+                          opacity: isFaceUp ? 0 : 1,
+                          duration: const Duration(milliseconds: 100),
+                          child: Container(
+                            width: 60, height: 100,
+                            decoration: BoxDecoration(
+                              color: AppColors.cardBackDark,
+                              borderRadius: BorderRadius.circular(8),
+                              border: Border.all(color: AppColors.gold.withOpacity(0.4)),
+                              boxShadow: [BoxShadow(color: AppColors.goldGlow.withOpacity(0.2), blurRadius: 8)],
+                            ),
+                            child: Center(child: Text('${i + 1}',
+                                style: const TextStyle(color: AppColors.gold, fontSize: 20, fontWeight: FontWeight.bold))),
+                          ),
+                        ),
+                        // Card face (visible when flipped)
+                        if (_flipCtrls[i].value >= 0.5)
+                          Transform(
+                            alignment: Alignment.center,
+                            transform: Matrix4.identity()..rotateY(pi),
+                            child: Container(
+                              width: 60, height: 100,
+                              decoration: BoxDecoration(
+                                borderRadius: BorderRadius.circular(8),
+                                border: Border.all(
+                                  color: _cards[i].isReversed ? Colors.redAccent.withOpacity(0.6) : AppColors.gold,
+                                  width: 1.5,
+                                ),
+                              ),
+                              child: ClipRRect(
+                                borderRadius: BorderRadius.circular(7),
+                                child: Transform(
+                                  alignment: Alignment.center,
+                                  transform: Matrix4.identity()..rotateZ(_cards[i].isReversed ? pi : 0),
+                                  child: Image.asset(
+                                    'assets/images/${_cards[i].card.img}',
+                                    width: 60, height: 100,
+                                    fit: BoxFit.cover,
+                                    errorBuilder: (_, __, ___) => Container(
+                                      color: AppColors.bgCard,
+                                      child: Center(child: Text(_cards[i].card.nameZh,
+                                          style: const TextStyle(color: AppColors.textPrimary, fontSize: 9),
+                                          textAlign: TextAlign.center)),
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ),
+                      ],
+                    ),
+                  ),
+                ),
+              );
+            }),
+            if (_currentFlipIndex >= 0 && _currentFlipIndex < count)
+              Positioned(
+                top: 20, left: 0, right: 0,
+                child: Center(
+                  child: Text(
+                    positions[_currentFlipIndex],
+                    style: const TextStyle(color: AppColors.gold, fontSize: 14, fontWeight: FontWeight.bold,
+                        shadows: [Shadow(color: AppColors.goldGlow, blurRadius: 8)]),
+                    textAlign: TextAlign.center,
+                  ),
+                ),
+              ),
+            if (_allRevealed)
+              Positioned(
+                bottom: 60, left: 0, right: 0,
+                child: GestureDetector(
+                  onTap: () {
+                    AudioManager().playSfx('audio/magic_start.mp3');
+                    final drawnCards = _cards.map((c) => DrawnCard(
+                      card: c.card, isReversed: c.isReversed, positionMeaning: c.positionMeaning,
+                    )).toList();
+                    Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => ReadingScreen(
+                      cards: drawnCards, topic: widget.topic, spread: widget.spread,
+                      lang: widget.lang, userQuestion: widget.userQuestion,
+                    )));
+                  },
+                  child: Container(
+                    margin: const EdgeInsets.symmetric(horizontal: 60),
+                    height: 50,
+                    decoration: BoxDecoration(
+                      color: AppColors.primary, borderRadius: BorderRadius.circular(25),
+                      boxShadow: [BoxShadow(color: AppColors.primary.withOpacity(0.4), blurRadius: 12)],
+                    ),
+                    child: Center(child: Text(tr(widget.lang, '开始解读', 'Begin Reading', 'Mula Bacaan'),
+                        style: const TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.w600))),
+                  ),
+                ),
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _RitualCardData {
+  final TarotCard card;
+  final bool isReversed;
+  final String positionMeaning;
+  _RitualCardData({required this.card, required this.isReversed, required this.positionMeaning});
 }
 
 // ================= 历史记录界面 =================
@@ -928,6 +1747,13 @@ class HistoryScreen extends StatelessWidget {
     return Scaffold(
       appBar: AppBar(
         title: Text(tr(lang, '灵境档案 (历史)', 'Divination History', 'Rekod Sejarah')),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.auto_awesome, color: AppColors.gold),
+            tooltip: tr(lang, '月度复盘', 'Monthly Review', 'Semakan Bulanan'),
+            onPressed: () => _openMonthlyReview(context),
+          ),
+        ],
       ),
       body: Container(
         decoration: const BoxDecoration(
@@ -969,15 +1795,21 @@ class HistoryScreen extends StatelessWidget {
                   onDismissed: (_) {
                     box.delete(record.id);
                   },
-                  child: Container(
-                    margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                    decoration: glassDecoration(borderRadius: 16, borderColor: AppColors.mysticPurpleDim),
-                    child: ListTile(
-                      contentPadding: const EdgeInsets.all(16),
-                      title: Text(
-                        topic.text(lang),
-                        style: const TextStyle(color: AppColors.gold, fontWeight: FontWeight.bold, fontSize: 17),
-                      ),
+                      child: Container(
+                        margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                        decoration: glassDecoration(borderRadius: 16, borderColor: AppColors.mysticPurpleDim),
+                        child: ListTile(
+                          contentPadding: const EdgeInsets.all(16),
+                          title: Row(
+                            children: [
+                              Expanded(child: Text(
+                                topic.text(lang),
+                                style: const TextStyle(color: AppColors.gold, fontWeight: FontWeight.bold, fontSize: 17),
+                              )),
+                              if (record.moodTag != null)
+                                Text(record.moodTag!, style: const TextStyle(fontSize: 20)),
+                            ],
+                          ),
                       subtitle: Padding(
                         padding: const EdgeInsets.only(top: 8),
                         child: Column(
@@ -1005,6 +1837,289 @@ class HistoryScreen extends StatelessWidget {
                   ),
                 );
               },
+            );
+          },
+        ),
+      ),
+    );
+  }
+}
+
+void _openMonthlyReview(BuildContext context) {
+  final box = Hive.box<ReadingRecord>('reading_history');
+  final now = DateTime.now();
+  final monthRecords = box.values.where((r) {
+    final dt = DateTime.fromMillisecondsSinceEpoch(r.timestamp);
+    return dt.year == now.year && dt.month == now.month;
+  }).toList();
+
+  Navigator.push(context, _createRoute(_MonthlyReviewScreen(records: monthRecords)));
+}
+
+class _MonthlyReviewScreen extends StatefulWidget {
+  final List<ReadingRecord> records;
+  const _MonthlyReviewScreen({Key? key, required this.records}) : super(key: key);
+  @override
+  _MonthlyReviewScreenState createState() => _MonthlyReviewScreenState();
+}
+class _MonthlyReviewScreenState extends State<_MonthlyReviewScreen> {
+  String _reviewText = '';
+  bool _isLoading = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _generateReview();
+  }
+
+  Future<void> _generateReview() async {
+    if (widget.records.isEmpty) {
+      setState(() => _reviewText = 'No records this month yet.');
+      return;
+    }
+    setState(() => _isLoading = true);
+
+    int total = widget.records.length;
+    final suitCounts = <String, int>{};
+    final moodCounts = <String, int>{};
+    final topicCounts = <String, int>{};
+    for (final r in widget.records) {
+      topicCounts[r.topicZh] = (topicCounts[r.topicZh] ?? 0) + 1;
+      if (r.moodTag != null) moodCounts[r.moodTag!] = (moodCounts[r.moodTag!] ?? 0) + 1;
+      try {
+        final cards = cardsFromJson(r.cardsJson);
+        for (final c in cards) {
+          final suit = c.card.suit ?? 'Major';
+          suitCounts[suit] = (suitCounts[suit] ?? 0) + 1;
+        }
+      } catch (_) {}
+    }
+    final topSuit = suitCounts.entries.toList()..sort((a, b) => b.value.compareTo(a.value));
+    final topMood = moodCounts.entries.toList()..sort((a, b) => b.value.compareTo(a.value));
+    final topTopic = topicCounts.entries.toList()..sort((a, b) => b.value.compareTo(a.value));
+
+    final prompt = "You are a wise tarot mentor. Analyze this user's monthly tarot reading data. Be warm and insightful.\n\n"
+        "Monthly Stats:\n"
+        "- Total readings: $total\n"
+        "- Most common topics: ${topTopic.take(3).map((e) => '${e.key}(${e.value})').join(', ')}\n"
+        "- Suit distribution: ${topSuit.take(4).map((e) => '${e.key}(${e.value})').join(', ')}\n"
+        "- Mood distribution: ${topMood.take(4).map((e) => '${e.key}(${e.value})').join(', ')}\n\n"
+        "Please provide:\n"
+        "1. Overall energy trend for the month\n"
+        "2. Key themes observed\n"
+        "3. Advice for the coming month\n"
+        "Keep it concise but heartfelt.";
+
+    try {
+      final response = await http.post(
+        Uri.parse('https://tai-taro.vercel.app/api/gemini'),
+        headers: {'Content-Type': 'application/json', 'x-app-version': '2.1.0'},
+        body: jsonEncode({"prompt": prompt, "max_tokens": 2048}),
+      );
+      if (!mounted) return;
+      if (response.statusCode == 200) {
+        final data = jsonDecode(utf8.decode(response.bodyBytes));
+        setState(() => _reviewText = data['text'] ?? 'Review generated.');
+      } else {
+        setState(() => _reviewText = "API Error: ${response.statusCode}");
+      }
+    } catch (e) {
+      if (mounted) setState(() => _reviewText = "Error: $e");
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(title: const Text('Monthly Review')),
+      body: Container(
+        decoration: const BoxDecoration(
+          gradient: LinearGradient(begin: Alignment.topCenter, end: Alignment.bottomCenter, colors: [AppColors.bgTop, AppColors.bgBottom]),
+        ),
+        child: _isLoading
+            ? const Center(child: CircularProgressIndicator(color: AppColors.gold))
+            : SingleChildScrollView(
+                padding: const EdgeInsets.all(20),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text('${widget.records.length} readings this month',
+                        style: const TextStyle(color: AppColors.gold, fontSize: 16, fontWeight: FontWeight.bold)),
+                    const SizedBox(height: 16),
+                    MarkdownBody(data: _reviewText, styleSheet: MarkdownStyleSheet(
+                      p: const TextStyle(color: Colors.white70, fontSize: 15, height: 1.8),
+                      strong: const TextStyle(color: AppColors.gold, fontWeight: FontWeight.bold),
+                    )),
+                  ],
+                ),
+              ),
+      ),
+    );
+  }
+}
+
+// ================= 抽卡界面 (Gacha) =================
+class GachaScreen extends StatefulWidget {
+  final AppLanguage lang;
+  const GachaScreen({Key? key, required this.lang}) : super(key: key);
+  @override
+  _GachaScreenState createState() => _GachaScreenState();
+}
+class _GachaScreenState extends State<GachaScreen> with SingleTickerProviderStateMixin {
+  late GachaEngine _engine;
+  Box<GachaState>? _gachaBox;
+  final _skinNotifier = ValueNotifier<String>('classic');
+  late AnimationController _flipCtrl;
+  TarotCard? _pulledCard;
+  String _rarity = '';
+  String? _error;
+
+  @override
+  void initState() {
+    super.initState();
+    _flipCtrl = AnimationController(vsync: this, duration: const Duration(milliseconds: 600));
+    _initBox();
+  }
+
+  Future<void> _initBox() async {
+    _gachaBox = await Hive.openBox<GachaState>('gacha_state');
+    final s = _gachaBox!.get('state');
+    _engine = GachaEngine(
+      pullsSinceLastSSR: s?.pullsSinceLastSSR ?? 0,
+      lastFreePull: s?.lastFreePull ?? DateTime(2000),
+      ownedCards: s != null
+          ? Map.fromIterables(s.ownedCardNames, List.filled(s.ownedCardNames.length, 1))
+          : {},
+    );
+    if (mounted) setState(() {});
+  }
+
+  void _saveState() {
+    _gachaBox?.put('state', GachaState(
+      pullsSinceLastSSR: _engine.pullsSinceLastSSR,
+      lastFreePull: _engine.lastFreePull,
+      ownedCardNames: _engine.ownedCards.keys.toList(),
+    ));
+  }
+
+  @override
+  void dispose() { _flipCtrl.dispose(); _skinNotifier.dispose(); _gachaBox?.close(); super.dispose(); }
+
+  void _doPull() {
+    if (_engine.pullsSinceLastSSR == 0 && _gachaBox == null) return;
+    if (!_engine.canFreePull) { setState(() => _error = tr(widget.lang, '今日免费抽卡已用完', 'Free pull used for today', 'Cubaan percuma hari ini telah digunakan')); return; }
+    _engine.lastFreePull = DateTime.now();
+    final card = _engine.pull();
+    _engine.ownedCards[card.nameZh] = (_engine.ownedCards[card.nameZh] ?? 0) + 1;
+    _saveState();
+    setState(() { _pulledCard = card; _rarity = _engine.rarityLabel(card); _error = null; });
+    AudioManager().playSfx('audio/magic_start.mp3');
+    _flipCtrl.forward(from: 0);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(title: Text(tr(widget.lang, '抽卡集牌', 'Gacha', 'Gacha'))),
+      body: Container(
+        decoration: const BoxDecoration(
+          gradient: LinearGradient(begin: Alignment.topCenter, end: Alignment.bottomCenter,
+            colors: [AppColors.bgTop, AppColors.bgBottom]),
+        ),
+        child: Column(
+          children: [
+            const SizedBox(height: 20),
+            if (_error != null) Padding(
+              padding: const EdgeInsets.all(16),
+              child: Text(_error!, style: const TextStyle(color: Colors.orangeAccent, fontSize: 14)),
+            ),
+            Expanded(
+              child: Center(
+                child: _pulledCard == null ? Text(tr(widget.lang, '点击下方按钮抽卡', 'Tap to pull a card', 'Tekan untuk cabut kad'),
+                    style: const TextStyle(color: Colors.white54, fontSize: 16)) :
+                AnimatedBuilder(
+                  animation: _flipCtrl,
+                  builder: (_, __) {
+                    final angle = _flipCtrl.value * pi;
+                    return Transform(
+                      alignment: Alignment.center,
+                      transform: Matrix4.identity()..setEntry(3, 2, 0.001)..rotateY(angle),
+                      child: angle < pi / 2
+                        ? Container(width: 120, height: 180, decoration: BoxDecoration(
+                            color: AppColors.cardBackDark, borderRadius: BorderRadius.circular(12),
+                            border: Border.all(color: _engine.rarityColor(_rarity).withOpacity(0.6)),
+                          ), child: Center(child: Icon(Icons.star, color: _engine.rarityColor(_rarity), size: 40)))
+                        : Transform(
+                            alignment: Alignment.center,
+                            transform: Matrix4.identity()..rotateY(pi),
+                            child: Container(width: 120, height: 180, decoration: BoxDecoration(
+                              color: AppColors.bgCard, borderRadius: BorderRadius.circular(12),
+                              border: Border.all(color: _engine.rarityColor(_rarity).withOpacity(0.8), width: 2),
+                            ), child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
+                              Text(_pulledCard!.name(widget.lang), style: TextStyle(color: _engine.rarityColor(_rarity), fontSize: 14, fontWeight: FontWeight.bold)),
+                              const SizedBox(height: 4),
+                              Text(_rarity, style: TextStyle(color: _engine.rarityColor(_rarity), fontSize: 12)),
+                            ])),
+                        ),
+                    );
+                  },
+                ),
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.all(24),
+              child: GestureDetector(
+                onTap: _doPull,
+                child: Container(
+                  height: 50, width: double.infinity,
+                  decoration: BoxDecoration(
+                    gradient: const LinearGradient(colors: [Color(0xFF8E54E9), Color(0xFF4776E6)]),
+                    borderRadius: BorderRadius.circular(25),
+                  ),
+                  child: Center(child: Text(tr(widget.lang, '免费抽卡', 'Free Pull', 'Cubaan Percuma'),
+                      style: const TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.w600))),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+// ================= 图鉴界面 =================
+class CollectionScreen extends StatelessWidget {
+  final AppLanguage lang;
+  const CollectionScreen({Key? key, required this.lang}) : super(key: key);
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(title: Text(tr(lang, '卡牌图鉴', 'Collection', 'Koleksi'))),
+      body: Container(
+        decoration: const BoxDecoration(
+          gradient: LinearGradient(begin: Alignment.topCenter, end: Alignment.bottomCenter,
+            colors: [AppColors.bgTop, AppColors.bgBottom]),
+        ),
+        child: GridView.builder(
+          padding: const EdgeInsets.all(12),
+          gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+            crossAxisCount: 4, crossAxisSpacing: 8, mainAxisSpacing: 8, childAspectRatio: 0.65),
+          itemCount: tarotDeck.length,
+          itemBuilder: (_, i) {
+            final card = tarotDeck[i];
+            return Container(
+              decoration: BoxDecoration(
+                color: AppColors.bgCard, borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: Colors.white.withOpacity(0.08)),
+              ),
+              child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
+                Text(card.nameZh, style: const TextStyle(color: AppColors.textPrimary, fontSize: 11), textAlign: TextAlign.center, maxLines: 2),
+                const SizedBox(height: 2),
+                Text(card.number, style: const TextStyle(color: AppColors.textTertiary, fontSize: 9)),
+              ]),
             );
           },
         ),
@@ -1140,8 +2255,9 @@ class VirtualDrawScreen extends StatefulWidget {
   final Topic topic;
   final SpreadConfig spread;
   final AppLanguage lang;
+  final String? userQuestion;
 
-  const VirtualDrawScreen({Key? key, required this.topic, required this.spread, required this.lang}) : super(key: key);
+  const VirtualDrawScreen({Key? key, required this.topic, required this.spread, required this.lang, this.userQuestion}) : super(key: key);
 
   @override
   _VirtualDrawScreenState createState() => _VirtualDrawScreenState();
@@ -1238,7 +2354,7 @@ class _VirtualDrawScreenState extends State<VirtualDrawScreen> {
                 padding: const EdgeInsets.all(24),
                 child: GlowButton(
                   glowColor: AppColors.gold,
-                  onTap: () => Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => ReadingScreen(cards: drawnCards, topic: widget.topic, spread: widget.spread, lang: widget.lang))),
+                  onTap: () => Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => ReadingScreen(cards: drawnCards, topic: widget.topic, spread: widget.spread, lang: widget.lang, userQuestion: widget.userQuestion))),
                   child: Container(
                     padding: const EdgeInsets.symmetric(vertical: 18),
                     decoration: BoxDecoration(
@@ -1417,8 +2533,9 @@ class ManualDrawScreen extends StatefulWidget {
   final Topic topic;
   final SpreadConfig spread;
   final AppLanguage lang;
+  final String? userQuestion;
 
-  const ManualDrawScreen({Key? key, required this.topic, required this.spread, required this.lang}) : super(key: key);
+  const ManualDrawScreen({Key? key, required this.topic, required this.spread, required this.lang, this.userQuestion}) : super(key: key);
 
   @override
   _ManualDrawScreenState createState() => _ManualDrawScreenState();
@@ -1477,7 +2594,7 @@ class _ManualDrawScreenState extends State<ManualDrawScreen> {
   void _checkFinish() {
     if (selectedCards.length == widget.spread.positions(widget.lang).length) {
       Future.delayed(const Duration(milliseconds: 600), () {
-        Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => ReadingScreen(cards: selectedCards, topic: widget.topic, spread: widget.spread, lang: widget.lang)));
+        Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => ReadingScreen(cards: selectedCards, topic: widget.topic, spread: widget.spread, lang: widget.lang, userQuestion: widget.userQuestion)));
       });
     }
   }
@@ -1906,9 +3023,12 @@ class ReadingScreen extends StatefulWidget {
   final Topic topic;
   final SpreadConfig spread; 
   final AppLanguage lang;
+  final String? userQuestion;
+  final TarotScene scene;
   
   final bool isFromHistory;
   final String? historyAiResponse;
+  final String? contextHistory;
 
   const ReadingScreen({
     Key? key, 
@@ -1916,8 +3036,11 @@ class ReadingScreen extends StatefulWidget {
     required this.topic, 
     required this.spread, 
     required this.lang,
+    this.userQuestion,
+    this.scene = TarotScene.firstRead,
     this.isFromHistory = false,
     this.historyAiResponse,
+    this.contextHistory,
   }) : super(key: key);
 
   @override
@@ -1929,13 +3052,13 @@ class _ReadingScreenState extends State<ReadingScreen> with TickerProviderStateM
   bool isGenerating = false;
   bool showAI = false;
   bool isFinished = false;
-  bool _isError = false; 
+  bool _isError = false;
+  String? _moodTag;
 
   final String _proxyUrl = 'https://tai-taro.vercel.app/api/gemini';
 
   late AnimationController _magicCircleController;
   
-  // 修复了定时器引发的报错，设为了可空类型并在 dispose 前稳妥取消
   Timer? _loadingTextTimer;
   int _currentTipIndex = 0;
 
@@ -1949,6 +3072,11 @@ class _ReadingScreenState extends State<ReadingScreen> with TickerProviderStateM
       isGenerating = false;
       isFinished = true;
       aiResponse = widget.historyAiResponse ?? "";
+    } else if (widget.scene == TarotScene.daily || widget.scene == TarotScene.review) {
+      // 每日指引和运势复盘无需手动抽牌，自动触发AI解读
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        _askAI();
+      });
     }
   }
 
@@ -1973,6 +3101,53 @@ class _ReadingScreenState extends State<ReadingScreen> with TickerProviderStateM
     }
   }
 
+  Widget _buildMoodPicker() {
+    if (_moodTag != null) return const SizedBox.shrink();
+    const moods = ['😊', '😌', '😢', '😤', '🤔', '💔', '✨', '🕯️'];
+    return Container(
+      margin: const EdgeInsets.symmetric(vertical: 8),
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: AppColors.glassBg, borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: Colors.white.withOpacity(0.08)),
+      ),
+      child: Column(
+        children: [
+          Text(
+            widget.lang == AppLanguage.en ? 'How do you feel about this reading?' 
+            : widget.lang == AppLanguage.ms ? 'Apa perasaan anda tentang bacaan ini?'
+            : '这次解读给你什么感觉？',
+            style: const TextStyle(color: AppColors.textSecondary, fontSize: 13),
+          ),
+          const SizedBox(height: 10),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+            children: moods.map((m) {
+              final selected = _moodTag == m;
+              return GestureDetector(
+                onTap: () {
+                  setState(() => _moodTag = m);
+                  _saveToHistory();
+                  AudioManager().playSfx('audio/click.wav');
+                },
+                child: AnimatedContainer(
+                  duration: const Duration(milliseconds: 200),
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: selected ? AppColors.mysticPurple.withOpacity(0.3) : Colors.transparent,
+                    borderRadius: BorderRadius.circular(12),
+                    border: selected ? Border.all(color: AppColors.mysticPurple, width: 1.5) : null,
+                  ),
+                  child: Text(m, style: TextStyle(fontSize: selected ? 28 : 22)),
+                ),
+              );
+            }).toList(),
+          ),
+        ],
+      ),
+    );
+  }
+
   Future<void> _saveToHistory() async {
     if (widget.isFromHistory) return;
 
@@ -1986,6 +3161,7 @@ class _ReadingScreenState extends State<ReadingScreen> with TickerProviderStateM
         cardsJson: cardsToJson(widget.cards),
         aiResponse: aiResponse,
         langIndex: widget.lang.index,
+        moodTag: _moodTag,
       );
       await box.put(record.id, record);  
     } catch (e) {
@@ -1993,145 +3169,60 @@ class _ReadingScreenState extends State<ReadingScreen> with TickerProviderStateM
     }
   }
 
+  String _buildMoonPhaseContext() {
+    final phase = getCurrentMoonPhase();
+    return "\n[Celestial Context: Current moon phase is ${phase.text(AppLanguage.en)} (${phase.icon()}). " +
+        "The ${phase.text(AppLanguage.en)} influences the reading environment, encouraging " +
+        "${_moonReadingStyle(phase)}. Consider this energy in the interpretation.]\n";
+  }
+  String _moonReadingStyle(MoonPhase p) {
+    if (p == MoonPhase.newMoon) return 'new beginnings and setting intentions';
+    if (p == MoonPhase.fullMoon) return 'clarity, culmination, and emotional intensity';
+    if (p.index <= 3) return 'growth, forward motion, and building momentum';
+    return 'release, reflection, and letting go';
+  }
+  String _buildDimensionContext() {
+    final buf = StringBuffer('\n[Astrological Dimensions of Drawn Cards:]\n');
+    for (var c in widget.cards) {
+      final astro = majorArcanaAstrology[c.card.nameZh];
+      if (astro != null) {
+        buf.writeln('- ${c.card.nameZh}: Element=${astro['element']}, Planet=${astro['planet']}, Zodiac=${astro['zodiac']}');
+      }
+    }
+    return buf.toString();
+  }
+
   Future<void> _askAI() async {
     setState(() {
       showAI = true;
       isGenerating = true;
-      _isError = false; 
-      // 开启随机冷知识轮播定时器
+      _isError = false;
       _currentTipIndex = Random().nextInt(tipsZh.length);
       aiResponse = "";
     });
     
     _loadingTextTimer?.cancel();
     _loadingTextTimer = Timer.periodic(const Duration(seconds: 7), (timer) {
-      if (mounted) {
-        setState(() {
-          _currentTipIndex = (_currentTipIndex + 1) % tipsZh.length;
-        });
-      }
+      if (mounted) setState(() => _currentTipIndex = (_currentTipIndex + 1) % tipsZh.length);
     });
-    
-    String prompt = "";
-    if (widget.lang == AppLanguage.en) {
-      prompt = "You are a deeply intuitive, psychologically astute, and compassionate tarot master. IMPORTANT: YOU MUST ANSWER ENTIRELY IN ENGLISH.\n" +
-        "The user asked about 【${widget.topic.text(widget.lang)}】 using the 【${widget.spread.name(widget.lang)}】.\n\n" +
-        "Card draw details are as follows:\n";
-    } else if (widget.lang == AppLanguage.ms) {
-      prompt = "Anda adalah seorang pakar tarot yang sangat intuitif, peka secara psikologi, dan penuh belas kasihan. PENTING: ANDA MESTI MENJAWAB SEPENUHNYA DALAM BAHASA MELAYU (MALAY).\n" +
-        "Pengguna bertanya tentang 【${widget.topic.text(widget.lang)}】 menggunakan 【${widget.spread.name(widget.lang)}】.\n\n" +
-        "Butiran cabutan kad adalah seperti berikut:\n";
-    } else {
-      prompt = "你是一位极度神秘、深谙心理学且充满同理心的资深塔罗牌大师。请务必使用中文进行解答。\n" +
-        "用户向你求问关于【${widget.topic.text(widget.lang)}】的发展，使用的是【${widget.spread.name(widget.lang)}】。\n\n" +
-        "抽牌情况如下：\n";
-    }
+
+    String prompt = _buildScenePrompt();
+    prompt += _buildMoonPhaseContext() + _buildDimensionContext();
 
     for (var c in widget.cards) {
-      String status = c.isReversed 
-          ? (widget.lang == AppLanguage.en ? 'Reversed' : widget.lang == AppLanguage.ms ? 'Terbalik' : '逆位') 
+      String status = c.isReversed
+          ? (widget.lang == AppLanguage.en ? 'Reversed' : widget.lang == AppLanguage.ms ? 'Terbalik' : '逆位')
           : (widget.lang == AppLanguage.en ? 'Upright' : widget.lang == AppLanguage.ms ? 'Tegak' : '正位');
-          
       if (widget.lang == AppLanguage.en) {
-         prompt += "- At position [${c.positionMeaning}], the card drawn is [${c.card.name(widget.lang)}] (${status})\n";
+        prompt += "- At position [${c.positionMeaning}], the card drawn is [${c.card.name(widget.lang)}] (${status})\n";
       } else if (widget.lang == AppLanguage.ms) {
-         prompt += "- Di posisi [${c.positionMeaning}], kad yang dicabut adalah [${c.card.name(widget.lang)}] (${status})\n";
+        prompt += "- Di posisi [${c.positionMeaning}], kad yang dicabut adalah [${c.card.name(widget.lang)}] (${status})\n";
       } else {
-         prompt += "- 在【${c.positionMeaning}】位置，抽到【${c.card.name(widget.lang)}（$status）】\n";
+        prompt += "- 在【${c.positionMeaning}】位置，抽到【${c.card.name(widget.lang)}（$status）】\n";
       }
     }
 
-    if (widget.lang == AppLanguage.en) {
-      prompt += "\n" +
-  "【Role】\n" +
-  "You are a tarot analyst with 20 years of experience, also a psychological healer skilled in emotional counseling. Your tone is warm, healing, and incisive without being harsh. Your mission is to help users see their situation clearly through the cards, using down-to-earth language, not obscure jargon.\n\n" +
-  "【Core Rules】\n" +
-  "1. No riddles: Don't just say keywords like 'Two of Swords means avoidance'. Instead say 'You're like walking blindfolded at night, choosing not to see because you fear getting hurt.'\n" +
-  "2. Clear structure: Follow the output structure below strictly. Don't write a giant paragraph.\n" +
-  "3. Respect the spread: Interpret each card according to its position in the chosen spread (e.g., past, obstacle, outcome).\n" +
-  "4. NO TABLES: Do not use Markdown tables (like | column | column |). They break mobile layouts. Use bold headings, bullet points, or short paragraphs to present each card's reading.\n\n" +
-  "【Output Structure】(Use this exact Markdown)\n\n" +
-  "### 🔮 Energy Sensing\n" +
-  "Summarize the overall vibe in 1-2 sentences (e.g., 'This is a relationship at a crossroads, where both people are testing the waters but afraid to lean in.'). Show empathy, make the user feel understood.\n\n" +
-  "### 🃏 Card-by-Card Breakdown\n" +
-  "Explain each drawn card in order. For each card, cover these three points in paragraphs or bullet points (never a table):\n" +
-  "- **Position meaning**: What does this card represent here? (e.g., past influence, hidden fear)\n" +
-  "- **Visual impression**: What does the image convey? (e.g., 'A figure stands alone, back turned, looking isolated.')\n" +
-  "- **Real-life mapping (most important!)**: Translate the card's message into a concrete, everyday scenario.\n" +
-  "  - ❌ Bad: 'Four of Wands reversed means unstable foundation.'\n" +
-  "  - ✅ Good: 'Four of Wands reversed suggests that even though you're together, you don't feel a sense of “home” anymore. The recent arguments have made you worry this relationship could fall apart any moment.'\n\n" +
-  "### 💡 Cosmic Guidance\n" +
-  "Give 2-3 actionable tips. Each must be something the user can do right now. Avoid vague advice.\n" +
-  "Example: 'Tonight, try sending him a message that doesn't mention the fight — just share a song you like.'\n" +
-  "Example: 'Since they're avoiding communication right now, turn your energy inward: hit the gym or catch up with friends.'\n\n" +
-  "### ✨ Healing Note\n" +
-  "End with one warm, empowering sentence.\n\n" +
-  "【Spread-Specific Logic】\n" +
-  "- Holy Triangle (3 cards): Follow a clear timeline: past/cause → present/situation → future/outcome.\n" +
-  "- Choice Spread (5 cards): Clearly compare Path A vs. Path B, then give a preferred direction.\n" +
-  "- Grand Cross / Celtic Cross: Focus on the core obstacle and subconscious influences. Don't just list everything.\n\n" +
-  "Write in a warm, empathetic, conversational tone. Ensure the layout looks great on a phone screen (no tables, clear spacing).";
-    } else if (widget.lang == AppLanguage.ms) {
-      prompt += "\n" +
-  "【Peranan】\n" +
-  "Anda seorang penganalisis tarot berpengalaman 20 tahun, juga seorang penyembuh psikologi yang mahir dalam kaunseling emosi. Gaya bahasa anda: mesra, menyembuhkan, tajam tetapi tidak kasar. Tugas anda membantu pengguna melihat situasi dengan jelas melalui kad, menggunakan bahasa harian, bukan istilah yang mengelirukan.\n\n" +
-  "【Prinsip Utama】\n" +
-  "1. Tiada teka-teki: Jangan hanya sebut kata kunci seperti 'Dua Pedang bermaksud mengelak'. Sebaliknya katakan 'Anda seperti berjalan ditutup mata pada waktu malam, memilih untuk tidak melihat kerana takut terluka.'\n" +
-  "2. Struktur jelas: Ikuti struktur output di bawah dengan ketat. Jangan tulis perenggan panjang yang berjela.\n" +
-  "3. Hormati susunan: Tafsirkan setiap kad mengikut posisinya dalam susunan yang dipilih (cth., masa lalu, halangan, hasil).\n" +
-  "4. JANGAN GUNA JADUAL: Dilarang menggunakan jadual Markdown (seperti | lajur | lajur |). Jadual kelihatan sangat buruk pada skrin telefon. Gunakan tajuk tebal, titik bulet, atau perenggan pendek.\n\n" +
-  "【Struktur Output】(Gunakan Markdown ini dengan tepat)\n\n" +
-  "### 🔮 Pengesanan Tenaga\n" +
-  "Ringkaskan suasana keseluruhan dalam 1-2 ayat (cth., 'Hubungan ini berada di persimpangan, kedua-dua pihak saling menguji tetapi takut untuk mendekat.'). Tunjukkan empati, buat pengguna rasa difahami.\n\n" +
-  "### 🃏 Huraian Kad Demi Kad\n" +
-  "Terangkan setiap kad yang dicabut mengikut urutan. Untuk setiap kad, bincangkan tiga perkara ini dalam perenggan atau titik bulet (jangan guna jadual):\n" +
-  "- **Makna posisi**: Apakah yang diwakili kad ini di sini? (cth., pengaruh masa lalu, ketakutan tersembunyi)\n" +
-  "- **Gambaran visual**: Apakah yang disampaikan imej kad? (cth., 'Seseorang berdiri sendirian, membelakangi kita, kelihatan terasing.')\n" +
-  "- **Pemetaan realiti (paling penting!)**: Terjemahkan mesej kad ke dalam senario kehidupan sebenar.\n" +
-  "  - ❌ Salah: 'Empat Tongkat terbalik bermaksud asas tidak stabil.'\n" +
-  "  - ✅ Betul: 'Empat Tongkat terbalik menunjukkan walaupun anda bersama, anda tidak lagi merasai 'rasa rumah'. Pergaduhan baru-baru ini membuatkan anda bimbang hubungan ini boleh runtuh bila-bila masa.'\n\n" +
-  "### 💡 Panduan Kosmik\n" +
-  "Berikan 2-3 tip tindakan. Setiap satunya mesti sesuatu yang boleh dilakukan segera. Elakkan nasihat kabur.\n" +
-  "Contoh: 'Malam ini, cuba hantar mesej kepadanya tanpa menyebut pergaduhan — cuma kongsi lagu yang anda suka.'\n" +
-  "Contoh: 'Memandangkan dia mengelak komunikasi sekarang, alihkan perhatian kepada diri sendiri: pergi ke gim atau jumpa kawan-kawan.'\n\n" +
-  "### ✨ Catatan Penyembuhan\n" +
-  "Akhiri dengan satu ayat pendek yang membangkitkan semangat.\n\n" +
-  "【Logik Khusus Susunan】\n" +
-  "- Segitiga Suci (3 kad): Ikuti garis masa yang jelas: masa lalu/punca → sekarang/situasi → masa depan/hasil.\n" +
-  "- Susunan Pilihan (5 kad): Bandingkan dengan jelas Laluan A vs. Laluan B, kemudian berikan cadangan yang cenderung.\n" +
-  "- Salib Besar / Salib Celtic: Fokus pada halangan teras dan pengaruh bawah sedar. Jangan hanya senaraikan semuanya.\n\n" +
-  "Tulis dengan nada mesra, empati, dan bahasa perbualan. Pastikan susun atur kelihatan kemas pada skrin telefon (tiada jadual, jarak yang jelas).";
-    } else {
-      prompt += "\n" +
-  "【角色设定】\n" +
-  "你是一位拥有20年经验的资深塔罗分析师，也是一位擅长情感咨询的心理疗愈师。你的语言风格是：温暖、治愈、一针见血但不尖锐。你的任务是帮助用户通过塔罗牌看清现状，用生活化的语言解读，而不是用晦涩的术语吓唬他们。\n\n" +
-  "【核心原则】\n" +
-  "1. 拒绝谜语人：不要只说出牌的关键词，要解释成具体的生活场景。例如说「宝剑二代表逃避」不够，要说成「你现在的状态就像蒙着眼睛走夜路，因为害怕受伤所以选择什么都不看」。\n" +
-  "2. 结构清晰：必须严格按照下方的【输出结构】进行排版，不要写成一大段长文。\n" +
-  "3. 结合牌阵：必须根据用户选择的牌阵（如圣三角、大十字等）来定义每张牌的位置含义，不能张冠李戴。\n" +
-  "4. 禁止表格：绝对不要使用Markdown表格（如 | 列1 | 列2 | ），因为在手机上表格会严重挤压变形。请用加粗标题、段落或项目符号（- ）来逐张解读。\n\n" +
-  "【输出结构要求】（请严格遵守以下Markdown格式）\n\n" +
-  "### 🔮 能量感知\n" +
-  "用1-2句话概括当下的整体氛围（比如：「这是一段处于瓶颈期的关系，双方都在试探却不敢靠近」）。描述用户当下的心理状态，让用户觉得「你懂我」。\n\n" +
-  "### 🃏 牌面深度拆解\n" +
-  "根据抽到的牌，按顺序逐张解读。每张牌必须包含以下三个要素，用段落或项目符号展示，不要用表格：\n" +
-  "- **位置含义**：这张牌在这个牌阵位置代表什么（例如：过去的影响、对方的真实想法）。\n" +
-  "- **画面翻译**：简单描述牌面带来的直观感受（例如：一个人背对着我们，看起来很孤独）。\n" +
-  "- **现实映射（重点！）**：把牌意翻译成生活中的具体场景。\n" +
-  "  - ❌ 错误示范：「权杖四逆位代表基础不稳。」\n" +
-  "  - ✅ 正确示范：「权杖四逆位意味着你们虽然在一起，但心里都没有‘家’的安全感，可能最近频繁的争吵让你觉得这段感情随时会散。」\n\n" +
-  "### 💡 宇宙指引\n" +
-  "给出2-3条具体的行动建议，每条必须是可以立刻去做的（Actionable），不要模棱两可的废话。\n" +
-  "例如：「今晚试着给他发个信息，不提吵架的事，只分享一首好听的歌。」\n" +
-  "例如：「既然对方现在回避沟通，建议你先把注意力收回到自己身上，去健个身或找朋友聚聚。」\n\n" +
-  "### ✨ 疗愈寄语\n" +
-  "用一句温暖的短句结尾，给用户力量。\n\n" +
-  "【针对不同牌阵的逻辑修正】\n" +
-  "- 如果是圣三角（3张）：严格按照「过去/起因 → 现在/现状 → 未来/结果」的时间线逻辑解读。\n" +
-  "- 如果是二选一（5张）：必须明确对比「选择A的路径」和「选择B的路径」的优劣，最后给出倾向性建议。\n" +
-  "- 如果是大十字/凯尔特十字：重点分析「核心阻碍」和「潜意识影响」，不要流水账。\n\n" +
-  "请用温暖、共情、贴近生活的语言撰写，确保用户在手机上竖屏阅读时排版清晰舒适。";
-    }
+    prompt += _buildOutputRules();
 
     try {
       final response = await http.post(
@@ -2139,36 +3230,155 @@ class _ReadingScreenState extends State<ReadingScreen> with TickerProviderStateM
         headers: {'Content-Type': 'application/json', 'x-app-version': '2.1.0'},
         body: jsonEncode({"prompt": prompt, "max_tokens": 2048}),
       );
-      
       if (!mounted) return;
-
       if (response.statusCode == 200) {
         final data = jsonDecode(utf8.decode(response.bodyBytes));
         setState(() {
-          aiResponse = data['text'] ?? (
-            widget.lang == AppLanguage.en ? 'The reader is unable to interpret right now, please try again later.' 
-            : widget.lang == AppLanguage.ms ? 'Pakar tarot tidak dapat mentafsir sekarang, sila cuba lagi nanti.'
-            : '占卜师暂时无法解读，请稍后再试。'
-          );
+          aiResponse = data['text'] ?? (widget.lang == AppLanguage.en ? 'The reader is unable to interpret right now, please try again later.'
+              : widget.lang == AppLanguage.ms ? 'Pakar tarot tidak dapat mentafsir sekarang, sila cuba lagi nanti.'
+              : '占卜师暂时无法解读，请稍后再试。');
           _isError = false;
         });
         _saveToHistory();
       } else {
-        setState(() {
-          aiResponse = "⚠️ API Failed (${response.statusCode})\n\n${response.body}";
-          _isError = true;
-        });
+        setState(() { aiResponse = "⚠️ API Failed (${response.statusCode})\n\n${response.body}"; _isError = true; });
       }
     } catch (e) {
-      if (!mounted) return; 
-      setState(() {
-        aiResponse = "⚠️ Network issue or Master disconnected. ($e)";
-        _isError = true;
-      });
+      if (!mounted) return;
+      setState(() { aiResponse = "⚠️ Network issue or Master disconnected. ($e)"; _isError = true; });
     } finally {
       _loadingTextTimer?.cancel();
       if (mounted) setState(() => isGenerating = false);
     }
+  }
+
+  String _buildScenePrompt() {
+    final q = widget.userQuestion != null && widget.userQuestion!.isNotEmpty ? widget.userQuestion : null;
+    final base = widget.lang == AppLanguage.en
+        ? "You are a deeply intuitive, psychologically astute, and compassionate tarot master. ANSWER IN ENGLISH.\n"
+        : widget.lang == AppLanguage.ms
+        ? "Anda adalah seorang pakar tarot yang sangat intuitif, peka secara psikologi, dan penuh belas kasihan. JAWAB DALAM BAHASA MELAYU.\n"
+        : "你是一位极度神秘、深谙心理学且充满同理心的资深塔罗牌大师。请使用中文进行解答。\n";
+
+    final qBlock = q != null
+        ? (widget.lang == AppLanguage.en
+            ? "=== THE USER'S EXACT QUESTION ===\n\"$q\"\nDIRECTLY answer this question. Interpret every card in relation to it.\n=== END OF QUESTION ===\n"
+            : widget.lang == AppLanguage.ms
+            ? "=== SOALAN TEPAT PENGGUNA ===\n\"$q\"\nJAWAB soalan ini secara langsung. Tafsirkan setiap kad berkaitan soalan ini.\n=== TAMAT SOALAN ===\n"
+            : "=== 用户的核心问题 ===\n\"$q\"\n请务必围绕这个具体问题进行解读，每一张牌的解释都要紧扣这个问题。\n=== 问题结束 ===\n")
+        : "";
+
+    switch (widget.scene) {
+      case TarotScene.optimize:
+        return base + "The user wants to optimize their question about 【${widget.topic.text(widget.lang)}】.\n" +
+            "Their current question: \"${q ?? "No specific question provided"}\"\n" +
+            "Please provide 3 optimized versions of this question that are more specific, actionable, and likely to yield insightful tarot readings. " +
+            "Format your response as a JSON array: [\"option1\", \"option2\", \"option3\"]\n" +
+            "Each option should reframe the question to be more clear, specific, and tarot-friendly.\n";
+
+      case TarotScene.daily:
+        return base + "This is a 每日指引 Daily Guidance reading for the user about 【${widget.topic.text(widget.lang)}】.\n" +
+            qBlock +
+            "The user draws cards for daily insight. Keep the reading concise (2-3 paragraphs), focused on the day ahead, " +
+            "and provide one simple actionable advice they can apply today. Be warm and uplifting.\n";
+
+      case TarotScene.review:
+        return base + "This is a 运势复盘 Periodic Review reading for the user about 【${widget.topic.text(widget.lang)}】.\n" +
+            qBlock +
+            (widget.contextHistory != null ? "Recent history of readings:\n${widget.contextHistory}\n\n" : "") +
+            "Provide a high-level review of the user's recent energy trends and suggest what to focus on going forward. " +
+            "This is a meta-level reflection on their tarot journey.\n";
+
+      case TarotScene.followUp:
+        return base + "The user previously got a reading about 【${widget.topic.text(widget.lang)}】 and now has a follow-up question.\n" +
+            qBlock +
+            (widget.contextHistory != null ? "Context from previous reading:\n${widget.contextHistory}\n\n" : "") +
+            "Address the follow-up question while connecting back to the previous reading context.\n";
+
+      default: // firstRead
+        final langContext = widget.lang == AppLanguage.en
+            ? "The user is asking about 【${widget.topic.text(widget.lang)}】 using the 【${widget.spread.name(widget.lang)}】.\n"
+            : widget.lang == AppLanguage.ms
+            ? "Pengguna bertanya tentang 【${widget.topic.text(widget.lang)}】 menggunakan 【${widget.spread.name(widget.lang)}】.\n"
+            : "用户向你求问关于【${widget.topic.text(widget.lang)}】的发展，使用的是【${widget.spread.name(widget.lang)}】。\n";
+        final langCardList = widget.lang == AppLanguage.en
+            ? "Card draw details are as follows. Interpret each card in relation to the question above:\n"
+            : widget.lang == AppLanguage.ms
+            ? "Butiran cabutan kad adalah seperti berikut. Tafsirkan setiap kad berkaitan soalan di atas:\n"
+            : "抽牌情况如下：请紧扣上述问题，逐张解读每张牌对问题的启示：\n";
+        final langUrge = q != null ? (widget.lang == AppLanguage.en
+            ? "\nIMPORTANT: The user provided a specific question above. Every card interpretation MUST directly answer that question.\n"
+            : widget.lang == AppLanguage.ms
+            ? "\nPENTING: Pengguna memberikan soalan khusus di atas. Setiap tafsiran kad MESTI menjawab soalan itu secara langsung.\n"
+            : "\n重要：用户已经在上面提出了具体问题。你对每张牌的解读必须直接回答这个问题。\n") : "";
+        return base + qBlock + langUrge + langContext + langCardList;
+    }
+  }
+
+  String _buildOutputRules() {
+    if (widget.lang == AppLanguage.en) {
+      return "\n" +
+    "【Role】\n" +
+    "You are a tarot analyst with 20 years of experience, also a psychological healer. Your tone: warm, healing, incisive without being harsh.\n\n" +
+    "【Core Rules】\n" +
+    "1. No riddles: Explain meanings in concrete life scenarios.\n" +
+    "2. Clear structure: Follow the output structure below. No giant paragraphs.\n" +
+    "3. Respect the spread: Interpret each card according to its position.\n" +
+    "4. NO TABLES: Do not use Markdown tables.\n\n" +
+    "### 🔮 Energy Sensing\n" +
+    "Summarize the overall vibe in 1-2 sentences.\n\n" +
+    "### 🃏 Card-by-Card Breakdown\n" +
+    "Explain each drawn card. For each card:\n" +
+    "- **Position meaning**: What does this position represent?\n" +
+    "- **Visual impression**: What does the image convey?\n" +
+    "- **Real-life mapping (most important!)**: Translate into a concrete, everyday scenario.\n\n" +
+    "### 💡 Cosmic Guidance\n" +
+    "Give 2-3 actionable tips.\n\n" +
+    "### ✨ Healing Note\n" +
+    "End with one warm, empowering sentence.\n\n" +
+    "Write in a warm, empathetic, conversational tone. No tables, clear spacing.";
+    } else if (widget.lang == AppLanguage.ms) {
+      return "\n" +
+    "【Peranan】\n" +
+    "Anda seorang penganalisis tarot berpengalaman 20 tahun, juga penyembuh psikologi. Gaya: mesra, menyembuhkan, tajam.\n\n" +
+    "【Prinsip Utama】\n" +
+    "1. Tiada teka-teki: Terangkan dalam senario kehidupan sebenar.\n" +
+    "2. Struktur jelas: Ikuti struktur output di bawah.\n" +
+    "3. Hormati susunan: Tafsirkan setiap kad mengikut posisi.\n" +
+    "4. JANGAN GUNA JADUAL.\n\n" +
+    "### 🔮 Pengesanan Tenaga\n" +
+    "Ringkaskan suasana keseluruhan dalam 1-2 ayat.\n\n" +
+    "### 🃏 Huraian Kad Demi Kad\n" +
+    "Terangkan setiap kad:\n" +
+    "- **Makna posisi**: Apakah yang diwakili?\n" +
+    "- **Gambaran visual**: Apakah yang disampaikan imej?\n" +
+    "- **Pemetaan realiti**: Terjemahkan ke senario kehidupan.\n\n" +
+    "### 💡 Panduan Kosmik\n" +
+    "2-3 tip tindakan.\n\n" +
+    "### ✨ Catatan Penyembuhan\n" +
+    "Akhiri dengan satu ayat semangat.\n\n" +
+    "Nada mesra, empati. Tiada jadual.";
+    }
+    return "\n" +
+    "【角色设定】\n" +
+    "你是一位拥有20年经验的资深塔罗分析师，也是一位擅长情感咨询的心理疗愈师。\n\n" +
+    "【核心原则】\n" +
+    "1. 拒绝谜语人：用生活化的场景来解释，不要只写关键词。\n" +
+    "2. 结构清晰：必须严格按照输出结构排版。\n" +
+    "3. 结合牌阵：根据所选牌阵定义每张牌的位置含义。\n" +
+    "4. 禁止表格：禁止使用Markdown表格，用加粗标题和段落。\n\n" +
+    "### 🔮 能量感知\n" +
+    "用1-2句话概括整体氛围。\n\n" +
+    "### 🃏 牌面深度拆解\n" +
+    "按顺序逐张解读。每张牌必须包含：\n" +
+    "- **位置含义**：这张牌在这位置代表什么。\n" +
+    "- **画面翻译**：牌面带来的直观感受。\n" +
+    "- **现实映射（重点！）**：把牌意翻译成生活中的具体场景。\n\n" +
+    "### 💡 宇宙指引\n" +
+    "给出2-3条具体的行动建议。\n\n" +
+    "### ✨ 疗愈寄语\n" +
+    "用一句温暖的短句结尾。\n\n" +
+    "用温暖、共情、贴近生活的语言撰写。";
   }
 
   MarkdownStyleSheet get _mdStyleSheet => MarkdownStyleSheet(
@@ -2240,78 +3450,81 @@ class _ReadingScreenState extends State<ReadingScreen> with TickerProviderStateM
         child: ListView(
           padding: const EdgeInsets.all(16),
           children: [
-            Container(
-              height: widget.spread.nameZh.contains('凯尔特') ? 380 : 250,
-              padding: const EdgeInsets.symmetric(vertical: 10),
-              margin: const EdgeInsets.only(bottom: 24),
-              decoration: glassDecoration(borderRadius: 16),
-              child: SpreadVisualizer(spreadName: widget.spread.nameZh, cards: miniMapCards), 
-            ),
+            // 仅在有抽牌结果时显示牌阵可视化和卡牌详情
+            if (widget.cards.isNotEmpty) ...[
+              Container(
+                height: widget.spread.nameZh.contains('凯尔特') ? 380 : 250,
+                padding: const EdgeInsets.symmetric(vertical: 10),
+                margin: const EdgeInsets.only(bottom: 24),
+                decoration: glassDecoration(borderRadius: 16),
+                child: SpreadVisualizer(spreadName: widget.spread.nameZh, cards: miniMapCards), 
+              ),
 
-            ...widget.cards.map((c) {
-              final status = c.isReversed 
-                  ? (widget.lang == AppLanguage.en ? "Reversed" : widget.lang == AppLanguage.ms ? "Terbalik" : "逆位") 
-                  : (widget.lang == AppLanguage.en ? "Upright" : widget.lang == AppLanguage.ms ? "Tegak" : "正位");
-              final meaning = c.isReversed ? c.card.reversedMeaning(widget.lang) : c.card.uprightMeaning(widget.lang);
+              ...widget.cards.map((c) {
+                final status = c.isReversed 
+                    ? (widget.lang == AppLanguage.en ? "Reversed" : widget.lang == AppLanguage.ms ? "Terbalik" : "逆位") 
+                    : (widget.lang == AppLanguage.en ? "Upright" : widget.lang == AppLanguage.ms ? "Tegak" : "正位");
+                final meaning = c.isReversed ? c.card.reversedMeaning(widget.lang) : c.card.uprightMeaning(widget.lang);
 
-              return Container(
-                margin: const EdgeInsets.only(bottom: 20),
-                decoration: glassDecoration(borderColor: AppColors.gold), 
-                child: Padding(
-                  padding: const EdgeInsets.all(20.0),
-                  child: Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Transform(
-                        transform: Matrix4.identity()..rotateZ(c.isReversed ? pi : 0),
-                        alignment: Alignment.center,
-                        child: Container(
-                          decoration: BoxDecoration(
-                            border: Border.all(color: AppColors.gold, width: 1),
-                            borderRadius: BorderRadius.circular(6)
-                          ),
-                          child: ClipRRect(
-                            borderRadius: BorderRadius.circular(5),
-                            child: Image.asset(
-                              'assets/images/${c.card.img}',
-                              width: 80, height: 140, fit: BoxFit.cover,
-                              errorBuilder: (ctx, err, stack) => Container(width: 80, height: 140, color: Colors.grey[900]),
+                return Container(
+                  margin: const EdgeInsets.only(bottom: 20),
+                  decoration: glassDecoration(borderColor: AppColors.gold), 
+                  child: Padding(
+                    padding: const EdgeInsets.all(20.0),
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Transform(
+                          transform: Matrix4.identity()..rotateZ(c.isReversed ? pi : 0),
+                          alignment: Alignment.center,
+                          child: Container(
+                            decoration: BoxDecoration(
+                              border: Border.all(color: AppColors.gold, width: 1),
+                              borderRadius: BorderRadius.circular(6)
+                            ),
+                            child: ClipRRect(
+                              borderRadius: BorderRadius.circular(5),
+                              child: Image.asset(
+                                'assets/images/${c.card.img}',
+                                width: 80, height: 140, fit: BoxFit.cover,
+                                errorBuilder: (ctx, err, stack) => Container(width: 80, height: 140, color: Colors.grey[900]),
+                              ),
                             ),
                           ),
                         ),
-                      ),
-                      const SizedBox(width: 20),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              '【${c.positionMeaning}】\n${c.card.name(widget.lang)}',
-                              style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: AppColors.gold, height: 1.4, shadows: [Shadow(color: AppColors.goldGlow, blurRadius: 4)]),
-                            ),
-                            const SizedBox(height: 8),
-                            Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                              decoration: BoxDecoration(
-                                color: c.isReversed ? Colors.redAccent.withOpacity(0.15) : AppColors.cyanGlow.withOpacity(0.15),
-                                borderRadius: BorderRadius.circular(4),
-                                border: Border.all(color: c.isReversed ? Colors.redAccent.withOpacity(0.5) : AppColors.cyanGlow.withOpacity(0.5), width: 1),
+                        const SizedBox(width: 20),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                '【${c.positionMeaning}】\n${c.card.name(widget.lang)}',
+                                style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: AppColors.gold, height: 1.4, shadows: [Shadow(color: AppColors.goldGlow, blurRadius: 4)]),
                               ),
-                              child: Text(
-                                status,
-                                style: TextStyle(color: c.isReversed ? Colors.redAccent : AppColors.cyanGlow, fontWeight: FontWeight.w600, fontSize: 12),
+                              const SizedBox(height: 8),
+                              Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                decoration: BoxDecoration(
+                                  color: c.isReversed ? Colors.redAccent.withOpacity(0.15) : AppColors.cyanGlow.withOpacity(0.15),
+                                  borderRadius: BorderRadius.circular(4),
+                                  border: Border.all(color: c.isReversed ? Colors.redAccent.withOpacity(0.5) : AppColors.cyanGlow.withOpacity(0.5), width: 1),
+                                ),
+                                child: Text(
+                                  status,
+                                  style: TextStyle(color: c.isReversed ? Colors.redAccent : AppColors.cyanGlow, fontWeight: FontWeight.w600, fontSize: 12),
+                                ),
                               ),
-                            ),
-                            const Divider(color: Colors.white12, height: 24),
-                            Text(meaning, style: const TextStyle(fontSize: 14, height: 1.6, color: Colors.white70)),
-                          ],
-                        ),
-                      )
-                    ],
+                              const Divider(color: Colors.white12, height: 24),
+                              Text(meaning, style: const TextStyle(fontSize: 14, height: 1.6, color: Colors.white70)),
+                            ],
+                          ),
+                        )
+                      ],
+                    ),
                   ),
-                ),
-              );
-            }).toList(),
+                );
+              }).toList(),
+            ],
 
             if (showAI)
               Container(
@@ -2361,6 +3574,25 @@ class _ReadingScreenState extends State<ReadingScreen> with TickerProviderStateM
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
+                            if (widget.userQuestion != null && widget.userQuestion!.isNotEmpty)
+                              Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                                decoration: BoxDecoration(
+                                  color: AppColors.primary.withOpacity(0.06),
+                                  borderRadius: BorderRadius.circular(6),
+                                ),
+                                child: Row(
+                                  children: [
+                                    Icon(Icons.help_outline, color: AppColors.primary.withOpacity(0.5), size: 14),
+                                    const SizedBox(width: 6),
+                                    Flexible(
+                                      child: Text(widget.userQuestion!,
+                                          style: TextStyle(color: AppColors.textTertiary, fontSize: 12),
+                                          maxLines: 2, overflow: TextOverflow.ellipsis),
+                                    ),
+                                  ],
+                                ),
+                              ),
                             _buildTypewriterText(),
                             
                             if (!isGenerating && _isError)
@@ -2402,6 +3634,12 @@ class _ReadingScreenState extends State<ReadingScreen> with TickerProviderStateM
                       ),
                   ],
                 ),
+              ),
+
+            if (showAI && !isGenerating && !_isError)
+              Padding(
+                padding: const EdgeInsets.only(bottom: 12),
+                child: _buildMoodPicker(),
               ),
 
             const SizedBox(height: 100),
