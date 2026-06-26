@@ -18,7 +18,7 @@ module.exports = async function handler(req, res) {
   }
 
   try {
-    const { prompt } = req.body;
+    const { prompt, max_tokens = 2048 } = req.body;
 
     if (!prompt) {
       return res.status(400).json({ error: "Missing prompt" });
@@ -52,29 +52,49 @@ module.exports = async function handler(req, res) {
             "z-ai/glm-4.5-air:free",
           ],
           messages: [
+            {
+              role: "system",
+              content: "You are a precise tarot reading assistant. The user's exact question inside the prompt is the highest-priority context. First answer that question directly, then use every card and spread position as supporting evidence. Never replace the question with a generic reading. Do not claim certainty or invent personal facts. Follow the requested response language and format."
+            },
             { role: "user", content: prompt }
           ],
-          temperature: 0.7,
-          max_tokens: 2048 
+          temperature: 0.45,
+          max_tokens: Math.min(Number(max_tokens) || 2048, 3000),
+          stream: true
         })
       }
     );
 
-    const data = await openRouterRes.json();
-
     if (!openRouterRes.ok) {
+      const data = await openRouterRes.json();
       return res.status(openRouterRes.status).json(data);
     }
 
-    // 解析 OpenRouter 的返回格式
-    const text = data?.choices?.[0]?.message?.content || "占卜师暂时无法解读，请稍后再试。";
+    // 设置流式响应头
+    res.setHeader("Content-Type", "text/event-stream; charset=utf-8");
+    res.setHeader("Cache-Control", "no-cache, no-transform");
+    res.setHeader("Connection", "keep-alive");
 
-    return res.status(200).json({ text });
+    // 将 OpenRouter 返回的 ReadableStream 逐块写入 Vercel response
+    const reader = openRouterRes.body.getReader();
+    const decoder = new TextDecoder("utf-8");
+
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      res.write(decoder.decode(value, { stream: true }));
+    }
+    
+    res.end();
   } catch (error) {
     console.error("Vercel 执行错误:", error);
-    return res.status(500).json({
-      error: "Server error",
-      detail: error.message
-    });
+    if (!res.headersSent) {
+      return res.status(500).json({
+        error: "Server error",
+        detail: error.message
+      });
+    } else {
+      res.end();
+    }
   }
 };

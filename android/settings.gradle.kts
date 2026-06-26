@@ -23,6 +23,8 @@ plugins {
     // START: FlutterFire Configuration
     id("com.google.gms.google-services") version("4.3.15") apply false
     // END: FlutterFire Configuration
+    // Kept on the classpath for third-party plugins that have not migrated yet.
+    // The app module itself uses AGP Built-in Kotlin.
     id("org.jetbrains.kotlin.android") version "2.2.20" apply false
 }
 

@@ -16,29 +16,29 @@ import 'firebase_options.dart';
 
 // ================= 全局色彩美学配置 =================
 class AppColors {
-  // Mystic palette
-  static const Color gold = Color(0xFFE8C37C);           
-  static const Color mysticPurple = Color(0xFF9E7BFF);   
-  static const Color cyanGlow = Color(0xFF4DEEEA);       
-  static const Color goldDim = Color.fromARGB(153, 158, 91, 185);        
-  static const Color goldGlow = Color.fromARGB(102, 205, 124, 232);       
-  static const Color mysticPurpleDim = Color(0x809E7BFF);
-  static const Color bgTop = Color.fromARGB(34, 103, 83, 138);          
-  static const Color bgBottom = Color(0xFF030206);       
-  static const Color glassBg = Color.fromARGB(160, 80, 50, 110);        
-  static const Color glassBorder = Color.fromARGB(77, 212, 124, 232);    
-  static const Color cardBackDark = Color.fromARGB(255, 33, 25, 67);   
-  static const Color cardBackLight = Color.fromARGB(255, 157, 7, 171);  
-  static const Color pink = Color.fromARGB(134, 150, 1, 150);
-  static const Color selectedTile = Color(0xFFE040FB);
+  // Obsidian Black & Gold palette (Sleek, Mysterious & Premium)
+  static const Color gold = Color(0xFFFFD54F); // Luminous Gold / Yellow
+  static const Color mysticPurple = Color(0xFFD4AF37); // Metallic Gold / Warm accent (reusing var name for compatibility)
+  static const Color cyanGlow = Color(0xFFFFF0B3); // Pale yellow glow
+  static const Color goldDim = Color(0x66FFD54F);
+  static const Color goldGlow = Color(0x33FFD54F);
+  static const Color mysticPurpleDim = Color(0x66D4AF37);
+  static const Color bgTop = Color(0xFF151515); // Dark Charcoal
+  static const Color bgBottom = Color(0xFF000000); // Pure Black
+  static const Color glassBg = Color(0xCC111111);
+  static const Color glassBorder = Color(0x4DFFD54F);
+  static const Color cardBackDark = Color(0xFF000000);
+  static const Color cardBackLight = Color(0xFF1E1E1E);
+  static const Color pink = Color(0x99FFA500); // Orange tint
+  static const Color selectedTile = Color(0xFFFFD54F);
 
   // TDesign palette
-  static const Color primary = Color(0xFF0052D9);
-  static const Color textPrimary = Color(0xFFE8E8E8);
-  static const Color textSecondary = Color(0xFFB0B0B0);
-  static const Color textTertiary = Color(0xFF808080);
-  static const Color bgCard = Color(0xFF1E1E2E);
-  static const Color bgElevated = Color(0xFF2A2A3E);
+  static const Color primary = Color(0xFFFFD54F);
+  static const Color textPrimary = Color(0xFFF8FAFC);
+  static const Color textSecondary = Color(0xFFAAA7A1);
+  static const Color textTertiary = Color(0xFF7A7A7A);
+  static const Color bgCard = Color(0xFF0A0A0A);
+  static const Color bgElevated = Color(0xFF151515);
 }
 
 Future<void> main() async {
@@ -77,6 +77,37 @@ class AudioManager {
     _bgmPlayer = AudioPlayer();
     _bgmPlayer.setReleaseMode(ReleaseMode.loop); // BGM 开启循环播放
     _sfxPlayer = AudioPlayer();
+    
+    // 单独为 BGM 配置焦点，允许后台播放和正常的焦点获取
+    _bgmPlayer.setAudioContext(AudioContext(
+      android: const AudioContextAndroid(
+        isSpeakerphoneOn: true,
+        stayAwake: true,
+        contentType: AndroidContentType.music,
+        usageType: AndroidUsageType.media,
+        audioFocus: AndroidAudioFocus.gain,
+      ),
+      iOS: AudioContextIOS(
+        category: AVAudioSessionCategory.playback,
+        options: const { AVAudioSessionOptions.mixWithOthers },
+      ),
+    ));
+
+    // 单独为 SFX（音效）配置焦点为 none，防止它抢占或释放 BGM 的焦点
+    _sfxPlayer.setAudioContext(AudioContext(
+      android: const AudioContextAndroid(
+        isSpeakerphoneOn: true,
+        stayAwake: false,
+        contentType: AndroidContentType.sonification,
+        usageType: AndroidUsageType.game,
+        audioFocus: AndroidAudioFocus.none,
+      ),
+      iOS: AudioContextIOS(
+        category: AVAudioSessionCategory.ambient,
+        options: const { AVAudioSessionOptions.mixWithOthers },
+      ),
+    ));
+    
     _initialized = true;
   }
 
@@ -92,7 +123,9 @@ class AudioManager {
   Future<void> playBgm(String path) async {
     if (!_initialized || _isBgmPlaying) return;
     try {
+      await _bgmPlayer.setVolume(1.0);
       await _bgmPlayer.play(AssetSource(path));
+      await _bgmPlayer.resume();
       _isBgmPlaying = true;
     } catch (e) {
       debugPrint('BGM play error: $e');
@@ -151,8 +184,8 @@ class ParticleBackgroundPainter extends CustomPainter {
       if (dx < 0) dx += size.width;
       if (dy < 0) dy += size.height;
       
-      trailPaint.color = Color.fromRGBO(158, 123, 255, (p.opacity * 0.3 * (0.7 + 0.3 * sin(time + p.x))).clamp(0.0, 1.0));
-      paint.color = Color.fromRGBO(232, 195, 124, (p.opacity * (0.8 + 0.2 * sin(time + p.x))).clamp(0.0, 1.0));
+      trailPaint.color = AppColors.cyanGlow.withOpacity((p.opacity * 0.3 * (0.7 + 0.3 * sin(time + p.x))).clamp(0.0, 1.0));
+      paint.color = AppColors.gold.withOpacity((p.opacity * (0.8 + 0.2 * sin(time + p.x))).clamp(0.0, 1.0));
       
       canvas.drawCircle(Offset(dx, dy), p.radius * 1.5, trailPaint);
       canvas.drawCircle(Offset(dx, dy), p.radius, paint);
@@ -240,8 +273,8 @@ class CandlelightPainter extends CustomPainter {
       center: const Alignment(0.3, -0.5),
       radius: 1.2,
       colors: [
-        Color.fromRGBO(255, 180, 80, (0.035 * flicker).clamp(0.0, 0.06)),
-        Color.fromRGBO(255, 140, 40, (0.015 * flicker).clamp(0.0, 0.03)),
+        AppColors.mysticPurple.withOpacity((0.02 * flicker).clamp(0.0, 0.04)),
+        AppColors.gold.withOpacity((0.01 * flicker).clamp(0.0, 0.02)),
         Colors.transparent,
       ],
       stops: const [0.0, 0.4, 1.0],
@@ -290,9 +323,9 @@ class _AnimatedBackgroundState extends State<AnimatedBackground> with SingleTick
                     center: Alignment(0.0, -0.4),
                     radius: 1.6,
                     colors: [
-                      Color.fromARGB(51, 128, 111, 171),
-                      Color.fromARGB(17, 42, 31, 70),
-                      Color.fromARGB(0, 40, 40, 40),
+                      Color.fromARGB(51, 255, 213, 79), // gold glow
+                      Color.fromARGB(34, 20, 20, 20), // dark charcoal
+                      Color.fromARGB(0, 0, 0, 0), // pure black
                     ],
                     stops: [0.0, 0.5, 1.0],
                   ),
@@ -1424,7 +1457,7 @@ class _HomeScreenState extends State<HomeScreen> {
                 _buildActionButton(
                   icon: Icons.touch_app_rounded,
                   label: tr(currentLanguage, '线上虚拟抽牌', 'Virtual Draw', 'Cabutan Maya'),
-                  colors: const [AppColors.primary, Color(0xFF3366FF)],
+                  colors: const [AppColors.gold, Color(0xFFD4AF37)], // Bright Gold to Metallic Gold
                   onTap: () {
                     AudioManager().playSfx('audio/magic_start.mp3');
                     Navigator.push(context, _createRoute(RitualScreen(topic: selectedTopic, spread: selectedSpread, lang: currentLanguage, userQuestion: _questionController.text.isNotEmpty ? _questionController.text : null)));
@@ -1434,7 +1467,7 @@ class _HomeScreenState extends State<HomeScreen> {
                 _buildActionButton(
                   icon: Icons.view_module_rounded,
                   label: tr(currentLanguage, '自主选牌录入', 'Manual Selection', 'Pilihan Manual'),
-                  colors: [AppColors.textTertiary, AppColors.textSecondary],
+                  colors: const [Color(0xFF8C6D23), Color(0xFF4A3B12)], // Subdued Bronze/Gold
                   onTap: () {
                     AudioManager().playSfx('audio/magic_start.mp3');
                     Navigator.push(context, _createRoute(ManualDrawScreen(topic: selectedTopic, spread: selectedSpread, lang: currentLanguage, userQuestion: _questionController.text.isNotEmpty ? _questionController.text : null)));
@@ -1911,17 +1944,37 @@ class _MonthlyReviewScreenState extends State<_MonthlyReviewScreen> {
         "Keep it concise but heartfelt.";
 
     try {
-      final response = await http.post(
-        Uri.parse('https://tai-taro.vercel.app/api/gemini'),
-        headers: {'Content-Type': 'application/json', 'x-app-version': '2.1.0'},
-        body: jsonEncode({"prompt": prompt, "max_tokens": 2048}),
-      );
+      final request = http.Request('POST', Uri.parse('https://tai-taro.vercel.app/api/gemini'));
+      request.headers.addAll({'Content-Type': 'application/json', 'x-app-version': '2.1.0'});
+      request.body = jsonEncode({"prompt": prompt, "max_tokens": 2048});
+
+      final response = await http.Client().send(request);
+      
       if (!mounted) return;
       if (response.statusCode == 200) {
-        final data = jsonDecode(utf8.decode(response.bodyBytes));
-        setState(() => _reviewText = data['text'] ?? 'Review generated.');
+        setState(() => _reviewText = ""); // clear it before streaming
+        await for (var chunk in response.stream.transform(utf8.decoder).transform(const LineSplitter())) {
+          if (!mounted) break;
+          if (chunk.startsWith('data: ')) {
+            final dataStr = chunk.substring(6);
+            if (dataStr == '[DONE]') continue;
+            try {
+              final data = jsonDecode(dataStr);
+              final content = data['choices']?[0]?['delta']?['content'] ?? '';
+              if (content.isNotEmpty) {
+                setState(() => _reviewText += content);
+              }
+            } catch (e) {
+              // Ignore partial chunk parse error
+            }
+          }
+        }
+        if (mounted && _reviewText.isEmpty) {
+           setState(() => _reviewText = 'Review generated.');
+        }
       } else {
-        setState(() => _reviewText = "API Error: ${response.statusCode}");
+        final errorBody = await response.stream.bytesToString();
+        setState(() => _reviewText = "API Error: ${response.statusCode}\n$errorBody");
       }
     } catch (e) {
       if (mounted) setState(() => _reviewText = "Error: $e");
@@ -2103,23 +2156,38 @@ class CollectionScreen extends StatelessWidget {
           gradient: LinearGradient(begin: Alignment.topCenter, end: Alignment.bottomCenter,
             colors: [AppColors.bgTop, AppColors.bgBottom]),
         ),
-        child: GridView.builder(
-          padding: const EdgeInsets.all(12),
-          gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-            crossAxisCount: 4, crossAxisSpacing: 8, mainAxisSpacing: 8, childAspectRatio: 0.65),
-          itemCount: tarotDeck.length,
-          itemBuilder: (_, i) {
-            final card = tarotDeck[i];
-            return Container(
-              decoration: BoxDecoration(
-                color: AppColors.bgCard, borderRadius: BorderRadius.circular(8),
-                border: Border.all(color: Colors.white.withOpacity(0.08)),
-              ),
-              child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
-                Text(card.nameZh, style: const TextStyle(color: AppColors.textPrimary, fontSize: 11), textAlign: TextAlign.center, maxLines: 2),
-                const SizedBox(height: 2),
-                Text(card.number, style: const TextStyle(color: AppColors.textTertiary, fontSize: 9)),
-              ]),
+        child: ValueListenableBuilder(
+          valueListenable: Hive.box<GachaState>('gacha_state').listenable(),
+          builder: (context, Box<GachaState> box, _) {
+            final state = box.get('state') ?? GachaState(pullsSinceLastSSR: 0, lastFreePull: DateTime(2000), ownedCardNames: []);
+            final owned = state.ownedCardNames;
+            return GridView.builder(
+              padding: const EdgeInsets.all(12),
+              gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                crossAxisCount: 4, crossAxisSpacing: 8, mainAxisSpacing: 8, childAspectRatio: 0.65),
+              itemCount: tarotDeck.length,
+              itemBuilder: (_, i) {
+                final card = tarotDeck[i];
+                final isOwned = owned.contains(card.nameZh);
+                return Container(
+                  decoration: BoxDecoration(
+                    color: AppColors.bgCard, borderRadius: BorderRadius.circular(8),
+                    border: Border.all(color: Colors.white.withOpacity(0.08)),
+                  ),
+                  child: isOwned 
+                    ? ClipRRect(
+                        borderRadius: BorderRadius.circular(8),
+                        child: Image.asset('assets/images/${card.img}', fit: BoxFit.cover, errorBuilder: (ctx, err, stack) => Container(color: AppColors.bgCard)),
+                      )
+                    : Column(mainAxisAlignment: MainAxisAlignment.center, children: [
+                        const Icon(Icons.lock_outline, color: AppColors.textTertiary, size: 20),
+                        const SizedBox(height: 4),
+                        Text(card.nameZh, style: const TextStyle(color: AppColors.textTertiary, fontSize: 10), textAlign: TextAlign.center, maxLines: 2),
+                        const SizedBox(height: 2),
+                        Text(card.number, style: const TextStyle(color: AppColors.textTertiary, fontSize: 8)),
+                      ]),
+                );
+              },
             );
           },
         ),
@@ -2291,6 +2359,17 @@ class _VirtualDrawScreenState extends State<VirtualDrawScreen> {
     List<Widget> cardWidgets = List.generate(drawnCards.length, (index) {
       bool isCrossed = (widget.spread.nameZh.contains('凯尔特') && index == 1);
       
+      Widget img = Transform.rotate(
+        angle: drawnCards[index].isReversed ? pi : 0,
+        child: Image.asset('assets/images/${drawnCards[index].card.img}', fit: BoxFit.cover, errorBuilder: (ctx, err, stack) => Container(color: Colors.grey[900])),
+      );
+      
+      Widget cardContent = TarotCardWidget(
+        drawnCard: drawnCards[index],
+        onFlipped: onCardFlipped,
+        isCrossed: isCrossed,
+      );
+      
       return SizedBox(
         width: 95, height: 215,
         child: Column(
@@ -2305,13 +2384,7 @@ class _VirtualDrawScreenState extends State<VirtualDrawScreen> {
                 textAlign: TextAlign.center, maxLines: 2,
               ),
             ),
-            Expanded(
-              child: TarotCardWidget(
-                drawnCard: drawnCards[index],
-                onFlipped: onCardFlipped,
-                isCrossed: isCrossed,
-              ),
-            ),
+            Expanded(child: cardContent),
           ],
         ),
       );
@@ -2421,7 +2494,7 @@ class _TarotCardWidgetState extends State<TarotCardWidget> with TickerProviderSt
 
   @override 
   Widget build(BuildContext context) {
-    return AnimatedBuilder(
+    Widget cardUI = AnimatedBuilder(
       animation: _flipAnimation,
       builder: (context, child) {
         final angle = _flipAnimation.value * pi;
@@ -2481,8 +2554,6 @@ class _TarotCardWidgetState extends State<TarotCardWidget> with TickerProviderSt
           );
         }
         
-        if (widget.isCrossed) cardUI = Transform.rotate(angle: pi / 2, child: cardUI);
-        
         return Stack(
           alignment: Alignment.center,
           children: [
@@ -2514,6 +2585,9 @@ class _TarotCardWidgetState extends State<TarotCardWidget> with TickerProviderSt
         );
       },
     );
+    
+    if (widget.isCrossed) cardUI = Transform.rotate(angle: pi / 2, child: cardUI);
+    return cardUI;
   }
 
   @override 
@@ -2612,7 +2686,11 @@ class _ManualDrawScreenState extends State<ManualDrawScreen> {
           angle: c.isReversed ? pi : 0,
           child: Image.asset('assets/images/${c.card.img}', fit: BoxFit.cover, errorBuilder: (ctx, err, stack) => Container(color: Colors.grey[900])),
         );
-        if (isCrossed) img = Transform.rotate(angle: pi / 2, child: img);
+        Widget cardContent = Container(
+          decoration: BoxDecoration(color: Color(0xFF1A1235), border: Border.all(color: AppColors.gold, width: 1.5), borderRadius: BorderRadius.circular(6)),
+          child: ClipRRect(borderRadius: BorderRadius.circular(4), child: img),
+        );
+        if (isCrossed) cardContent = Transform.rotate(angle: pi / 2, child: cardContent);
 
         return SizedBox(
           width: 95, height: 215,
@@ -2622,12 +2700,7 @@ class _ManualDrawScreenState extends State<ManualDrawScreen> {
                 height: 35, alignment: Alignment.center,
                 child: Text(c.positionMeaning, style: const TextStyle(color: AppColors.gold, fontSize: 12, fontWeight: FontWeight.bold, shadows: [Shadow(color: AppColors.goldGlow, blurRadius: 6)]), textAlign: TextAlign.center, maxLines: 2),
               ),
-              Expanded(
-                child: Container(
-                  decoration: BoxDecoration(color: Color(0xFF1A1235), border: Border.all(color: AppColors.gold, width: 1.5), borderRadius: BorderRadius.circular(6)),
-                  child: ClipRRect(borderRadius: BorderRadius.circular(4), child: img),
-                ),
-              ),
+              Expanded(child: cardContent),
             ],
           ),
         );
@@ -3120,8 +3193,10 @@ class _ReadingScreenState extends State<ReadingScreen> with TickerProviderStateM
             style: const TextStyle(color: AppColors.textSecondary, fontSize: 13),
           ),
           const SizedBox(height: 10),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+          Wrap(
+            alignment: WrapAlignment.spaceEvenly,
+            spacing: 8,
+            runSpacing: 8,
             children: moods.map((m) {
               final selected = _moodTag == m;
               return GestureDetector(
@@ -3225,23 +3300,50 @@ class _ReadingScreenState extends State<ReadingScreen> with TickerProviderStateM
     prompt += _buildOutputRules();
 
     try {
-      final response = await http.post(
-        Uri.parse(_proxyUrl),
-        headers: {'Content-Type': 'application/json', 'x-app-version': '2.1.0'},
-        body: jsonEncode({"prompt": prompt, "max_tokens": 2048}),
-      );
+      final request = http.Request('POST', Uri.parse(_proxyUrl));
+      request.headers.addAll({'Content-Type': 'application/json', 'x-app-version': '2.1.0'});
+      request.body = jsonEncode({"prompt": prompt, "max_tokens": 2048});
+
+      final response = await http.Client().send(request);
       if (!mounted) return;
+
       if (response.statusCode == 200) {
-        final data = jsonDecode(utf8.decode(response.bodyBytes));
-        setState(() {
-          aiResponse = data['text'] ?? (widget.lang == AppLanguage.en ? 'The reader is unable to interpret right now, please try again later.'
-              : widget.lang == AppLanguage.ms ? 'Pakar tarot tidak dapat mentafsir sekarang, sila cuba lagi nanti.'
-              : '占卜师暂时无法解读，请稍后再试。');
-          _isError = false;
-        });
-        _saveToHistory();
+        setState(() { _isError = false; });
+        
+        await for (var chunk in response.stream.transform(utf8.decoder).transform(const LineSplitter())) {
+          if (!mounted) break;
+          if (chunk.startsWith('data: ')) {
+            final dataStr = chunk.substring(6);
+            if (dataStr == '[DONE]') continue;
+            try {
+              final data = jsonDecode(dataStr);
+              final content = data['choices']?[0]?['delta']?['content'] ?? '';
+              if (content.isNotEmpty) {
+                setState(() {
+                  aiResponse += content;
+                });
+              }
+            } catch (e) {
+              // Ignore parse errors for partial chunks
+            }
+          }
+        }
+        
+        if (mounted) {
+          if (aiResponse.isEmpty) {
+            setState(() {
+              aiResponse = (widget.lang == AppLanguage.en ? 'The reader is unable to interpret right now, please try again later.'
+                  : widget.lang == AppLanguage.ms ? 'Pakar tarot tidak dapat mentafsir sekarang, sila cuba lagi nanti.'
+                  : '占卜师暂时无法解读，请稍后再试。');
+            });
+          }
+          _saveToHistory();
+        }
       } else {
-        setState(() { aiResponse = "⚠️ API Failed (${response.statusCode})\n\n${response.body}"; _isError = true; });
+        final errorBody = await response.stream.bytesToString();
+        if (mounted) {
+          setState(() { aiResponse = "⚠️ API Failed (${response.statusCode})\n\n$errorBody"; _isError = true; });
+        }
       }
     } catch (e) {
       if (!mounted) return;
@@ -3414,7 +3516,11 @@ class _ReadingScreenState extends State<ReadingScreen> with TickerProviderStateM
         angle: c.isReversed ? pi : 0,
         child: Image.asset('assets/images/${c.card.img}', fit: BoxFit.cover, errorBuilder: (ctx, err, stack) => Container(color: Colors.grey[900])),
       );
-      if (isCrossed) img = Transform.rotate(angle: pi / 2, child: img);
+      Widget cardContent = Container(
+        decoration: BoxDecoration(border: Border.all(color: AppColors.gold, width: 1.5), borderRadius: BorderRadius.circular(4)),
+        child: ClipRRect(borderRadius: BorderRadius.circular(2), child: img),
+      );
+      if (isCrossed) cardContent = Transform.rotate(angle: pi / 2, child: cardContent);
 
       return SizedBox(
         width: 95, height: 215,
@@ -3424,12 +3530,7 @@ class _ReadingScreenState extends State<ReadingScreen> with TickerProviderStateM
               height: 35, alignment: Alignment.center,
               child: Text(c.positionMeaning, style: const TextStyle(color: AppColors.gold, fontSize: 12, fontWeight: FontWeight.bold, shadows: [Shadow(color: AppColors.goldGlow, blurRadius: 6)]), textAlign: TextAlign.center, maxLines: 2),
             ),
-            Expanded(
-              child: Container(
-                decoration: BoxDecoration(border: Border.all(color: AppColors.gold, width: 1.5), borderRadius: BorderRadius.circular(4)),
-                child: ClipRRect(borderRadius: BorderRadius.circular(2), child: img),
-              ),
-            ),
+            Expanded(child: cardContent),
           ],
         ),
       );
