@@ -3173,6 +3173,27 @@ class _ReadingScreenState extends State<ReadingScreen> with TickerProviderStateM
     }
   }
 
+  Widget _buildMoodButton(String m) {
+    final selected = _moodTag == m;
+    return GestureDetector(
+      onTap: () {
+        setState(() => _moodTag = m);
+        _saveToHistory();
+        AudioManager().playSfx('audio/click.wav');
+      },
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 200),
+        padding: const EdgeInsets.all(8),
+        decoration: BoxDecoration(
+          color: selected ? AppColors.mysticPurple.withOpacity(0.3) : Colors.transparent,
+          borderRadius: BorderRadius.circular(12),
+          border: selected ? Border.all(color: AppColors.mysticPurple, width: 1.5) : null,
+        ),
+        child: Text(m, style: TextStyle(fontSize: selected ? 28 : 22)),
+      ),
+    );
+  }
+
   Widget _buildMoodPicker() {
     if (_moodTag != null) return const SizedBox.shrink();
     const moods = ['😊', '😌', '😢', '😤', '🤔', '💔', '✨', '🕯️'];
@@ -3192,30 +3213,14 @@ class _ReadingScreenState extends State<ReadingScreen> with TickerProviderStateM
             style: const TextStyle(color: AppColors.textSecondary, fontSize: 13),
           ),
           const SizedBox(height: 10),
-          Wrap(
-            alignment: WrapAlignment.spaceEvenly,
-            spacing: 8,
-            runSpacing: 8,
-            children: moods.map((m) {
-              final selected = _moodTag == m;
-              return GestureDetector(
-                onTap: () {
-                  setState(() => _moodTag = m);
-                  _saveToHistory();
-                  AudioManager().playSfx('audio/click.wav');
-                },
-                child: AnimatedContainer(
-                  duration: const Duration(milliseconds: 200),
-                  padding: const EdgeInsets.all(8),
-                  decoration: BoxDecoration(
-                    color: selected ? AppColors.mysticPurple.withOpacity(0.3) : Colors.transparent,
-                    borderRadius: BorderRadius.circular(12),
-                    border: selected ? Border.all(color: AppColors.mysticPurple, width: 1.5) : null,
-                  ),
-                  child: Text(m, style: TextStyle(fontSize: selected ? 28 : 22)),
-                ),
-              );
-            }).toList(),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+            children: moods.sublist(0, 4).map(_buildMoodButton).toList(),
+          ),
+          const SizedBox(height: 2),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+            children: moods.sublist(4, 8).map(_buildMoodButton).toList(),
           ),
         ],
       ),
