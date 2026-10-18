@@ -1,3 +1,10 @@
+const MODEL_QUEUE = [
+  "nvidia/nemotron-3-ultra-550b-a55b:free",
+  "openai/gpt-oss-120b:free",
+  "poolside/laguna-m.1:free",
+  "z-ai/glm-4.5-air:free",
+];
+
 module.exports = async function handler(req, res) {
   // 设置跨域 CORS
   res.setHeader("Access-Control-Allow-Origin", "*");
@@ -33,70 +40,80 @@ module.exports = async function handler(req, res) {
       });
     }
 
-    // 🌟 核心改动：向 OpenRouter API 发送请求并配置最新模型队列
-    const openRouterRes = await fetch(
-      "https://openrouter.ai/api/v1/chat/completions",
-      {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "Authorization": `Bearer ${apiKey}`,
-          "HTTP-Referer": "https://vercel.com", 
-          "X-Title": "Tarot App" 
+    const payload = {
+      messages: [
+        {
+          role: "system",
+          content: (() => {
+            let base = "You are a precise tarot reading assistant. The user's exact question inside the prompt is the highest-priority context. First answer that question directly, then use every card and spread position as supporting evidence. Never replace the question with a generic reading. Do not claim certainty or invent personal facts. Follow the requested response language and format.";
+            if (moonPhase || userMood) {
+              base += "\n\n### Current Astrological & Personal Context:\n";
+              if (moonPhase) base += `- Moon Phase: ${moonPhase}\n`;
+              if (userMood) base += `- User's current mood: ${userMood}\n`;
+              base += "Please subtly weave the energy of the Moon Phase and the user's mood into your interpretation to provide a multi-dimensional reading.";
+            }
+            return base;
+          })()
         },
-        body: JSON.stringify({
-          // 🔄 自动降级队列：按首选顺序排列。前一个触发限流或下线时，OpenRouter 会直接切到下一个。
-          models: [
-            "nvidia/nemotron-3-ultra-550b-a55b:free",
-            "openai/gpt-oss-120b:free",
-            "poolside/laguna-m.1:free",
-            "z-ai/glm-4.5-air:free",
-          ],
-          reasoning: { enabled: false },
-          messages: [
-            {
-              role: "system",
-              content: (() => {
-                let base = "You are a precise tarot reading assistant. The user's exact question inside the prompt is the highest-priority context. First answer that question directly, then use every card and spread position as supporting evidence. Never replace the question with a generic reading. Do not claim certainty or invent personal facts. Follow the requested response language and format.";
-                if (moonPhase || userMood) {
-                  base += "\n\n### Current Astrological & Personal Context:\n";
-                  if (moonPhase) base += `- Moon Phase: ${moonPhase}\n`;
-                  if (userMood) base += `- User's current mood: ${userMood}\n`;
-                  base += "Please subtly weave the energy of the Moon Phase and the user's mood into your interpretation to provide a multi-dimensional reading.";
-                }
-                return base;
-              })()
-            },
-            { role: "user", content: prompt }
-          ],
-          temperature: 0.45,
-          max_tokens: Math.min(Number(max_tokens) || 2048, 3000),
-          stream: true
-        })
+        { role: "user", content: prompt }
+      ],
+      temperature: 0.45,
+      max_tokens: Math.min(Number(max_tokens) || 2048, 3000),
+      stream: true,
+      reasoning: { enabled: false }
+    };
+
+    // 🔄 服务端自动降级：逐个模型尝试。免费端点经常间歇性下线（404），
+    // OpenRouter 的 models 数组不会为这类错误自动切换，所以这里手动轮询。
+    let lastStatus = 502;
+    let lastError = { error: "All models unavailable" };
+
+    for (const model of MODEL_QUEUE) {
+      const openRouterRes = await fetch(
+        "https://openrouter.ai/api/v1/chat/completions",
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "Authorization": `Bearer ${apiKey}`,
+            "HTTP-Referer": "https://vercel.com",
+            "X-Title": "Tarot App"
+          },
+          body: JSON.stringify({ ...payload, model })
+        }
+      );
+
+      if (!openRouterRes.ok) {
+        lastStatus = openRouterRes.status;
+        try {
+          lastError = await openRouterRes.json();
+        } catch (parseErr) {
+          lastError = { error: `Model ${model} failed` };
+        }
+        console.error(`[${model}] failed (${lastStatus}):`, JSON.stringify(lastError));
+        continue;
       }
-    );
 
-    if (!openRouterRes.ok) {
-      const data = await openRouterRes.json();
-      return res.status(openRouterRes.status).json(data);
+      // ✅ 命中可用模型：设置流式响应头并透传
+      res.setHeader("Content-Type", "text/event-stream; charset=utf-8");
+      res.setHeader("Cache-Control", "no-cache, no-transform");
+      res.setHeader("Connection", "keep-alive");
+
+      const reader = openRouterRes.body.getReader();
+      const decoder = new TextDecoder("utf-8");
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        res.write(decoder.decode(value, { stream: true }));
+      }
+
+      res.end();
+      return;
     }
 
-    // 设置流式响应头
-    res.setHeader("Content-Type", "text/event-stream; charset=utf-8");
-    res.setHeader("Cache-Control", "no-cache, no-transform");
-    res.setHeader("Connection", "keep-alive");
-
-    // 将 OpenRouter 返回的 ReadableStream 逐块写入 Vercel response
-    const reader = openRouterRes.body.getReader();
-    const decoder = new TextDecoder("utf-8");
-
-    while (true) {
-      const { done, value } = await reader.read();
-      if (done) break;
-      res.write(decoder.decode(value, { stream: true }));
-    }
-    
-    res.end();
+    // ❌ 所有模型都失败
+    return res.status(lastStatus).json(lastError);
   } catch (error) {
     console.error("Vercel 执行错误:", error);
     if (!res.headersSent) {
