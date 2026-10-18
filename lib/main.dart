@@ -1576,7 +1576,6 @@ class RitualScreen extends StatefulWidget {
   _RitualScreenState createState() => _RitualScreenState();
 }
 class _RitualScreenState extends State<RitualScreen> with TickerProviderStateMixin {
-  static const int _pileCount = 15;
   static const double _cardW = 56, _cardH = 92;
   static const double _pileCardW = 50, _pileCardH = 80;
 
@@ -1587,6 +1586,7 @@ class _RitualScreenState extends State<RitualScreen> with TickerProviderStateMix
 
   late AnimationController _enterCtrl;
   late AnimationController _flyCtrl;
+  late AnimationController _hintCtrl;
   _FlightData? _flight;
   Size _canvasSize = Size.zero;
 
@@ -1594,27 +1594,33 @@ class _RitualScreenState extends State<RitualScreen> with TickerProviderStateMix
   void initState() {
     super.initState();
     final deck = List<TarotCard>.from(tarotDeck)..shuffle();
-    _pile.addAll(deck.take(_pileCount));
+    _pile.addAll(deck);
     final count = widget.spread.positionsZh.length;
     _slots = List<_RitualCardData?>.filled(count, null);
     _flipCtrls = List.generate(count, (_) => AnimationController(vsync: this, duration: const Duration(milliseconds: 550)));
-    _enterCtrl = AnimationController(vsync: this, duration: const Duration(milliseconds: 900))..forward();
+    _enterCtrl = AnimationController(vsync: this, duration: const Duration(milliseconds: 500))..forward();
     _flyCtrl = AnimationController(vsync: this, duration: const Duration(milliseconds: 650));
     _flyCtrl.addStatusListener((s) {
       if (s == AnimationStatus.completed) _landCard();
     });
+    _hintCtrl = AnimationController(vsync: this, duration: const Duration(milliseconds: 900))..repeat(reverse: true);
   }
 
   bool get _allDrawn => _drawnCount >= _slots.length;
 
   ({Offset pos, double angle}) _pileCardLayout(int i) {
     final n = _pile.length;
-    final spacing = n > 1 ? min(24.0, (_canvasSize.width - 40 - _pileCardW) / (n - 1)) : 0.0;
-    final totalW = _pileCardW + spacing * (n - 1);
-    final t = n > 1 ? i / (n - 1) : 0.5;
-    final x = (_canvasSize.width - totalW) / 2 + spacing * i;
-    final y = _canvasSize.height - 158 - sin(pi * t) * 16 + (t - 0.5).abs() * 26;
-    return (pos: Offset(x, y), angle: (t - 0.5) * 0.46);
+    final rowACount = (n + 1) ~/ 2;
+    final isRowA = i < rowACount;
+    final idxInRow = isRowA ? i : i - rowACount;
+    final countInRow = isRowA ? rowACount : n - rowACount;
+    final spacing = countInRow > 1 ? min(26.0, (_canvasSize.width - 24 - _pileCardW) / (countInRow - 1)) : 0.0;
+    final totalW = _pileCardW + spacing * (countInRow - 1);
+    final t = countInRow > 1 ? idxInRow / (countInRow - 1) : 0.5;
+    final x = (_canvasSize.width - totalW) / 2 + spacing * idxInRow;
+    final baseY = _canvasSize.height - (isRowA ? 238.0 : 148.0);
+    final y = baseY - sin(pi * t) * 14;
+    return (pos: Offset(x, y), angle: (t - 0.5) * (isRowA ? 0.34 : 0.26));
   }
 
   Offset _slotTopLeft(int i) {
@@ -1628,7 +1634,7 @@ class _RitualScreenState extends State<RitualScreen> with TickerProviderStateMix
     final rowW = rowCount * _cardW + (rowCount - 1) * gap;
     final left = (_canvasSize.width - rowW) / 2 + col * (_cardW + gap);
     final totalH = rows * _cardH + (rows - 1) * gap;
-    final top = (_canvasSize.height / 2 - 10) - totalH / 2 + row * (_cardH + gap);
+    final top = (_canvasSize.height * 0.44 - 10) - totalH / 2 + row * (_cardH + gap);
     return Offset(left, top);
   }
 
@@ -1671,6 +1677,7 @@ class _RitualScreenState extends State<RitualScreen> with TickerProviderStateMix
   void dispose() {
     _enterCtrl.dispose();
     _flyCtrl.dispose();
+    _hintCtrl.dispose();
     for (final c in _flipCtrls) c.dispose();
     super.dispose();
   }
@@ -1762,13 +1769,14 @@ class _RitualScreenState extends State<RitualScreen> with TickerProviderStateMix
           builder: (context, constraints) {
             _canvasSize = Size(constraints.maxWidth, constraints.maxHeight);
             return AnimatedBuilder(
-              animation: Listenable.merge([_enterCtrl, _flyCtrl]),
+              animation: Listenable.merge([_enterCtrl, _flyCtrl, _hintCtrl]),
               builder: (context, _) {
                 return Stack(
                   children: [
                     ..._buildSlots(),
-                    ..._buildPile(),
+                    _buildPile(),
                     _buildPrompt(positions),
+                    _buildHint(),
                     if (_flight != null) _buildFlyingCard(),
                     if (_allDrawn) _buildStartButton(),
                   ],
@@ -1805,12 +1813,37 @@ class _RitualScreenState extends State<RitualScreen> with TickerProviderStateMix
               textAlign: TextAlign.center,
               style: const TextStyle(color: AppColors.textSecondary, fontSize: 13),
             ),
-            const SizedBox(height: 6),
-            Text(
-              tr(widget.lang, '凭直觉点击牌堆中的任意一张牌', 'Trust your instinct and tap any card', 'Ikut gerak hati, ketik mana-mana kad'),
-              style: TextStyle(color: Colors.white.withOpacity(0.35), fontSize: 11),
-            ),
           ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildHint() {
+    if (_allDrawn) return const SizedBox.shrink();
+    final bob = sin(_hintCtrl.value * pi) * 5;
+    const pulse = 0.55;
+    final alpha = pulse + (1 - pulse) * sin(_hintCtrl.value * pi);
+    final appear = Curves.easeOut.transform(((_enterCtrl.value - 0.3) / 0.7).clamp(0.0, 1.0));
+    return Positioned(
+      bottom: 298, left: 0, right: 0,
+      child: Opacity(
+        opacity: alpha * appear,
+        child: Transform.translate(
+          offset: Offset(0, bob),
+          child: Column(
+            children: [
+              Text(
+                tr(widget.lang, '从下方牌堆点击抽牌', 'Tap a card from the deck below', 'Ketik kad dari dek di bawah'),
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  color: AppColors.gold.withOpacity(0.9), fontSize: 13, fontWeight: FontWeight.w600,
+                  shadows: [Shadow(color: AppColors.goldGlow, blurRadius: 8)],
+                ),
+              ),
+              Icon(Icons.keyboard_double_arrow_down_rounded, color: AppColors.gold.withOpacity(0.8), size: 20),
+            ],
+          ),
         ),
       ),
     );
@@ -1851,35 +1884,40 @@ class _RitualScreenState extends State<RitualScreen> with TickerProviderStateMix
     });
   }
 
-  List<Widget> _buildPile() {
+  Widget _buildPile() {
     final animating = _enterCtrl.isAnimating;
     final done = _allDrawn;
-    return List.generate(_pile.length, (i) {
-      final layout = _pileCardLayout(i);
-      final t = ((_enterCtrl.value - i * 0.028) / (1 - 0.028 * (_pileCount - 1))).clamp(0.0, 1.0);
-      final eased = Curves.easeOutCubic.transform(t);
-      return AnimatedPositioned(
-        key: ObjectKey(_pile[i]),
-        duration: animating ? Duration.zero : const Duration(milliseconds: 350),
-        curve: Curves.easeOutCubic,
-        left: layout.pos.dx,
-        top: layout.pos.dy + (1 - eased) * 180 + (done ? 160 : 0),
-        width: _pileCardW,
-        height: _pileCardH,
-        child: AnimatedOpacity(
-          duration: const Duration(milliseconds: 350),
+    final eased = Curves.easeOutCubic.transform(_enterCtrl.value);
+    return Positioned.fill(
+      child: IgnorePointer(
+        ignoring: done,
+        child: Opacity(
           opacity: done ? 0.0 : eased,
-          child: GestureDetector(
-            behavior: HitTestBehavior.opaque,
-            onTap: () => _onPileTap(i),
-            child: Transform.rotate(
-              angle: layout.angle,
-              child: _backCard(_pileCardW, _pileCardH),
-            ),
+          child: Stack(
+            children: List.generate(_pile.length, (i) {
+              final layout = _pileCardLayout(i);
+              return AnimatedPositioned(
+                key: ObjectKey(_pile[i]),
+                duration: animating ? Duration.zero : const Duration(milliseconds: 300),
+                curve: Curves.easeOutCubic,
+                left: layout.pos.dx,
+                top: layout.pos.dy + (1 - eased) * 200 + (done ? 220 : 0),
+                width: _pileCardW,
+                height: _pileCardH,
+                child: GestureDetector(
+                  behavior: HitTestBehavior.opaque,
+                  onTap: () => _onPileTap(i),
+                  child: Transform.rotate(
+                    angle: layout.angle,
+                    child: _backCard(_pileCardW, _pileCardH),
+                  ),
+                ),
+              );
+            }),
           ),
         ),
-      );
-    });
+      ),
+    );
   }
 
   Widget _buildFlyingCard() {
