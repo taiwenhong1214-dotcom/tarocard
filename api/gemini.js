@@ -18,7 +18,7 @@ module.exports = async function handler(req, res) {
   }
 
   try {
-    const { prompt, max_tokens = 2048 } = req.body;
+    const { prompt, max_tokens = 2048, moonPhase, userMood } = req.body;
 
     if (!prompt) {
       return res.status(400).json({ error: "Missing prompt" });
@@ -54,7 +54,16 @@ module.exports = async function handler(req, res) {
           messages: [
             {
               role: "system",
-              content: "You are a precise tarot reading assistant. The user's exact question inside the prompt is the highest-priority context. First answer that question directly, then use every card and spread position as supporting evidence. Never replace the question with a generic reading. Do not claim certainty or invent personal facts. Follow the requested response language and format."
+              content: (() => {
+                let base = "You are a precise tarot reading assistant. The user's exact question inside the prompt is the highest-priority context. First answer that question directly, then use every card and spread position as supporting evidence. Never replace the question with a generic reading. Do not claim certainty or invent personal facts. Follow the requested response language and format.";
+                if (moonPhase || userMood) {
+                  base += "\n\n### Current Astrological & Personal Context:\n";
+                  if (moonPhase) base += `- Moon Phase: ${moonPhase}\n`;
+                  if (userMood) base += `- User's current mood: ${userMood}\n`;
+                  base += "Please subtly weave the energy of the Moon Phase and the user's mood into your interpretation to provide a multi-dimensional reading.";
+                }
+                return base;
+              })()
             },
             { role: "user", content: prompt }
           ],

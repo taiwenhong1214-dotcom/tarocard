@@ -16,29 +16,29 @@ import 'firebase_options.dart';
 
 // ================= 全局色彩美学配置 =================
 class AppColors {
-  // Obsidian Black & Gold palette (Sleek, Mysterious & Premium)
-  static const Color gold = Color(0xFFFFD54F); // Luminous Gold / Yellow
-  static const Color mysticPurple = Color(0xFFD4AF37); // Metallic Gold / Warm accent (reusing var name for compatibility)
-  static const Color cyanGlow = Color(0xFFFFF0B3); // Pale yellow glow
-  static const Color goldDim = Color(0x66FFD54F);
-  static const Color goldGlow = Color(0x33FFD54F);
-  static const Color mysticPurpleDim = Color(0x66D4AF37);
-  static const Color bgTop = Color(0xFF151515); // Dark Charcoal
-  static const Color bgBottom = Color(0xFF000000); // Pure Black
-  static const Color glassBg = Color(0xCC111111);
-  static const Color glassBorder = Color(0x4DFFD54F);
-  static const Color cardBackDark = Color(0xFF000000);
-  static const Color cardBackLight = Color(0xFF1E1E1E);
-  static const Color pink = Color(0x99FFA500); // Orange tint
-  static const Color selectedTile = Color(0xFFFFD54F);
+  // Midnight Amethyst & Champagne palette (Elegant, Dreamy & Premium)
+  static const Color gold = Color(0xFFE9CD8F); // Champagne Gold
+  static const Color mysticPurple = Color(0xFFA88BF0); // Soft Amethyst accent
+  static const Color cyanGlow = Color(0xFFEBE3FF); // Starlight Lavender glow
+  static const Color goldDim = Color(0x66E9CD8F);
+  static const Color goldGlow = Color(0x33E9CD8F);
+  static const Color mysticPurpleDim = Color(0x66A88BF0);
+  static const Color bgTop = Color(0xFF171030); // Midnight Violet
+  static const Color bgBottom = Color(0xFF090614); // Deep Night
+  static const Color glassBg = Color(0xCC171128);
+  static const Color glassBorder = Color(0x4DE9CD8F);
+  static const Color cardBackDark = Color(0xFF0C0818);
+  static const Color cardBackLight = Color(0xFF221A3E);
+  static const Color pink = Color(0x99E094C0); // Soft Rose
+  static const Color selectedTile = Color(0xFFE9CD8F);
 
   // TDesign palette
-  static const Color primary = Color(0xFFFFD54F);
-  static const Color textPrimary = Color(0xFFF8FAFC);
-  static const Color textSecondary = Color(0xFFAAA7A1);
-  static const Color textTertiary = Color(0xFF7A7A7A);
-  static const Color bgCard = Color(0xFF0A0A0A);
-  static const Color bgElevated = Color(0xFF151515);
+  static const Color primary = Color(0xFFE9CD8F);
+  static const Color textPrimary = Color(0xFFF6F3FB);
+  static const Color textSecondary = Color(0xFFADA5C4);
+  static const Color textTertiary = Color(0xFF7A7290);
+  static const Color bgCard = Color(0xFF161028);
+  static const Color bgElevated = Color(0xFF1E1738);
 }
 
 Future<void> main() async {
@@ -104,7 +104,6 @@ class AudioManager {
       ),
       iOS: AudioContextIOS(
         category: AVAudioSessionCategory.ambient,
-        options: const { AVAudioSessionOptions.mixWithOthers },
       ),
     ));
     
@@ -323,9 +322,9 @@ class _AnimatedBackgroundState extends State<AnimatedBackground> with SingleTick
                     center: Alignment(0.0, -0.4),
                     radius: 1.6,
                     colors: [
-                      Color.fromARGB(51, 255, 213, 79), // gold glow
-                      Color.fromARGB(34, 20, 20, 20), // dark charcoal
-                      Color.fromARGB(0, 0, 0, 0), // pure black
+                      Color.fromARGB(48, 233, 205, 143), // champagne glow
+                      Color.fromARGB(34, 23, 16, 48), // midnight violet
+                      Color.fromARGB(0, 0, 0, 0), // transparent
                     ],
                     stops: [0.0, 0.5, 1.0],
                   ),
@@ -415,7 +414,7 @@ class TarotApp extends StatelessWidget {
       title: '塔罗-灵境 Tarot',
       theme: ThemeData(
         brightness: Brightness.dark,
-        primaryColor: const Color.fromARGB(255, 232, 124, 207),
+        primaryColor: AppColors.primary,
         scaffoldBackgroundColor: Colors.transparent, 
         fontFamily: GoogleFonts.notoSerifSc().fontFamily,
         appBarTheme: AppBarTheme(
@@ -437,8 +436,8 @@ class TarotApp extends StatelessWidget {
           bodyLarge: GoogleFonts.notoSerifSc(color: Colors.white70, fontSize: 16),
           bodyMedium: GoogleFonts.notoSerifSc(color: Colors.white60, fontSize: 14),
         ),
-        cardColor: const Color(0xFF161026),
-        dialogBackgroundColor: const Color(0xFF1A132F),
+        cardColor: AppColors.bgCard,
+        dialogBackgroundColor: AppColors.bgElevated,
       ),
       home: const SplashScreen(),
       debugShowCheckedModeBanner: false,
@@ -739,7 +738,7 @@ String formatTimestamp(int ms) {
 
 BoxDecoration glassDecoration({Color? borderColor, double borderRadius = 18}) {
   return BoxDecoration(
-    color: const Color.fromARGB(255, 19, 5, 43),
+    color: const Color(0xFF140A2C),
     borderRadius: BorderRadius.circular(borderRadius),
     border: Border.all(
       color: borderColor ?? AppColors.glassBorder,
@@ -1028,9 +1027,9 @@ class _SplashScreenState extends State<SplashScreen> with TickerProviderStateMix
                       center: Alignment(0.0, -0.2),
                       radius: 1.5,
                       colors: [
-                        Color(0xFF1A0A2E),
-                        Color(0xFF0D0518),
-                        Color(0xFF030206),
+                        Color(0xFF1D1440),
+                        Color(0xFF100A24),
+                        Color(0xFF05030D),
                       ],
                       stops: [0.0, 0.5, 1.0],
                     ),
@@ -1105,7 +1104,7 @@ class _SplashScreenState extends State<SplashScreen> with TickerProviderStateMix
                                   gradient: const LinearGradient(
                                     begin: Alignment.topLeft,
                                     end: Alignment.bottomRight,
-                                    colors: [Color(0xFF2D1B69), Color(0xFF1A0A2E)],
+                                    colors: [Color(0xFF3B2A70), Color(0xFF1B1236)],
                                   ),
                                 ),
                                 child: const Center(
@@ -1305,7 +1304,7 @@ class _HomeScreenState extends State<HomeScreen> {
         title: Text(tr(currentLanguage, '塔 罗 灵 境', 'Tarot Realm', 'Dunia Tarot'),
             style: GoogleFonts.notoSerifSc(
               fontSize: 24, fontWeight: FontWeight.bold, letterSpacing: 4,
-              color: const Color.fromARGB(255, 204, 109, 227),
+              color: AppColors.gold,
               shadows: const [Shadow(color: AppColors.goldGlow, blurRadius: 12)]
             )),
         // ✅ 右侧只保留语言切换和文字标识
@@ -1457,7 +1456,7 @@ class _HomeScreenState extends State<HomeScreen> {
                 _buildActionButton(
                   icon: Icons.touch_app_rounded,
                   label: tr(currentLanguage, '线上虚拟抽牌', 'Virtual Draw', 'Cabutan Maya'),
-                  colors: const [AppColors.gold, Color(0xFFD4AF37)], // Bright Gold to Metallic Gold
+                  colors: const [Color(0xFFA88BF0), Color(0xFF6C4FD6)], // Amethyst gradient
                   onTap: () {
                     AudioManager().playSfx('audio/magic_start.mp3');
                     Navigator.push(context, _createRoute(RitualScreen(topic: selectedTopic, spread: selectedSpread, lang: currentLanguage, userQuestion: _questionController.text.isNotEmpty ? _questionController.text : null)));
@@ -1467,7 +1466,7 @@ class _HomeScreenState extends State<HomeScreen> {
                 _buildActionButton(
                   icon: Icons.view_module_rounded,
                   label: tr(currentLanguage, '自主选牌录入', 'Manual Selection', 'Pilihan Manual'),
-                  colors: const [Color(0xFF8C6D23), Color(0xFF4A3B12)], // Subdued Bronze/Gold
+                  colors: const [Color(0xFF7E5F22), Color(0xFF453714)], // Subdued Bronze/Gold
                   onTap: () {
                     AudioManager().playSfx('audio/magic_start.mp3');
                     Navigator.push(context, _createRoute(ManualDrawScreen(topic: selectedTopic, spread: selectedSpread, lang: currentLanguage, userQuestion: _questionController.text.isNotEmpty ? _questionController.text : null)));
@@ -2128,7 +2127,7 @@ class _GachaScreenState extends State<GachaScreen> with SingleTickerProviderStat
                 child: Container(
                   height: 50, width: double.infinity,
                   decoration: BoxDecoration(
-                    gradient: const LinearGradient(colors: [Color(0xFF8E54E9), Color(0xFF4776E6)]),
+                    gradient: const LinearGradient(colors: [Color(0xFFA88BF0), Color(0xFF6C4FD6)]),
                     borderRadius: BorderRadius.circular(25),
                   ),
                   child: Center(child: Text(tr(widget.lang, '免费抽卡', 'Free Pull', 'Cubaan Percuma'),
@@ -2431,7 +2430,7 @@ class _VirtualDrawScreenState extends State<VirtualDrawScreen> {
                   child: Container(
                     padding: const EdgeInsets.symmetric(vertical: 18),
                     decoration: BoxDecoration(
-                      gradient: const LinearGradient(colors: [Color(0xFFE8C37C), Color(0xFFA67C00)]),
+                      gradient: const LinearGradient(colors: [Color(0xFFF0DCA8), Color(0xFFC29A4A)]),
                       borderRadius: BorderRadius.circular(30),
                     ),
                     child: Center(
@@ -2687,7 +2686,7 @@ class _ManualDrawScreenState extends State<ManualDrawScreen> {
           child: Image.asset('assets/images/${c.card.img}', fit: BoxFit.cover, errorBuilder: (ctx, err, stack) => Container(color: Colors.grey[900])),
         );
         Widget cardContent = Container(
-          decoration: BoxDecoration(color: Color(0xFF1A1235), border: Border.all(color: AppColors.gold, width: 1.5), borderRadius: BorderRadius.circular(6)),
+          decoration: BoxDecoration(color: Color(0xFF1B1433), border: Border.all(color: AppColors.gold, width: 1.5), borderRadius: BorderRadius.circular(6)),
           child: ClipRRect(borderRadius: BorderRadius.circular(4), child: img),
         );
         if (isCrossed) cardContent = Transform.rotate(angle: pi / 2, child: cardContent);
@@ -3256,13 +3255,32 @@ class _ReadingScreenState extends State<ReadingScreen> with TickerProviderStateM
     if (p.index <= 3) return 'growth, forward motion, and building momentum';
     return 'release, reflection, and letting go';
   }
+  int _reduceNumber(int n) {
+    if (n == 0) return 0;
+    if (n == 11 || n == 22 || n == 33) return n; 
+    while (n > 9) {
+      n = n.toString().split('').map((e) => int.parse(e)).reduce((a, b) => a + b);
+      if (n == 11 || n == 22 || n == 33) return n;
+    }
+    return n;
+  }
+
   String _buildDimensionContext() {
-    final buf = StringBuffer('\n[Astrological Dimensions of Drawn Cards:]\n');
+    final buf = StringBuffer('\n[Astrological & Numerological Dimensions of Drawn Cards:]\n');
+    int totalSuma = 0;
     for (var c in widget.cards) {
       final astro = majorArcanaAstrology[c.card.nameZh];
       if (astro != null) {
         buf.writeln('- ${c.card.nameZh}: Element=${astro['element']}, Planet=${astro['planet']}, Zodiac=${astro['zodiac']}');
       }
+      int cardNum = int.tryParse(c.card.number) ?? 0;
+      totalSuma += cardNum;
+    }
+    
+    if (totalSuma > 0) {
+      int lifePath = _reduceNumber(totalSuma);
+      buf.writeln('\nNumerology (Life Path of this Spread): $lifePath (Total Base Sum=$totalSuma)');
+      buf.writeln('Please use this Numerology Life Path number to extract an overarching theme for the reading.');
     }
     return buf.toString();
   }
@@ -3759,7 +3777,7 @@ class _ReadingScreenState extends State<ReadingScreen> with TickerProviderStateM
               child: Container(
                 padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
                 decoration: BoxDecoration(
-                  gradient: const LinearGradient(colors: [Color(0xFF8E54E9), Color(0xFF4776E6)]),
+                  gradient: const LinearGradient(colors: [Color(0xFFA88BF0), Color(0xFF6C4FD6)]),
                   borderRadius: BorderRadius.circular(30),
                   border: Border.all(color: Colors.white.withOpacity(0.2)),
                 ),
