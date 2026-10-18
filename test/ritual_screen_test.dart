@@ -25,12 +25,10 @@ void main() {
 
     final promptText = find.textContaining('抽取第 1');
     expect(promptText, findsOneWidget);
-    final op = tester.widget<Opacity>(
-      find.ancestor(of: promptText, matching: find.byType(Opacity)).first,
-    );
-    expect(op.opacity, greaterThan(0.9), reason: 'entrance animation stuck (opacity still 0)');
 
     expect(find.byType(GestureDetector), findsNWidgets(tarotDeck.length));
+    final deckPos = tester.getCenter(find.byType(GestureDetector).last);
+    expect(deckPos.dy, lessThan(800), reason: 'pile cards rendered off-screen');
 
     final lastCard = find.byType(GestureDetector).last;
     await tester.tap(lastCard, warnIfMissed: true);
@@ -64,11 +62,9 @@ void main() {
     await tester.pump();
 
     final promptText = find.textContaining('抽取第 1');
-    expect(promptText, findsOneWidget);
-    final op = tester.widget<Opacity>(
-      find.ancestor(of: promptText, matching: find.byType(Opacity)).first,
-    );
-    expect(op.opacity, 1.0, reason: 'timer fallback should reveal content when tickers are muted');
+    expect(promptText, findsOneWidget, reason: 'content must render even with muted tickers');
+    final deckPos = tester.getCenter(find.byType(GestureDetector).last);
+    expect(deckPos.dy, lessThan(800), reason: 'pile must be on-screen even with muted tickers');
 
     final firstCard = find.byType(GestureDetector).first;
     await tester.tap(firstCard, warnIfMissed: false);
