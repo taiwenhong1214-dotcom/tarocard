@@ -43,7 +43,20 @@ class AppColors {
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  
+
+  ErrorWidget.builder = (FlutterErrorDetails details) => Directionality(
+    textDirection: TextDirection.ltr,
+    child: Container(
+      color: const Color(0xE68B0000),
+      padding: const EdgeInsets.all(10),
+      alignment: Alignment.center,
+      child: Text(
+        'Render error:\n${details.exceptionAsString()}',
+        style: const TextStyle(color: Colors.white, fontSize: 11),
+      ),
+    ),
+  );
+
   await Hive.initFlutter();
   Hive.registerAdapter(ReadingRecordAdapter());
   Hive.registerAdapter(GachaStateAdapter());
@@ -1589,6 +1602,8 @@ class _RitualScreenState extends State<RitualScreen> with TickerProviderStateMix
   late AnimationController _hintCtrl;
   _FlightData? _flight;
   Size _canvasSize = Size.zero;
+  bool _booted = false;
+  Timer? _bootTimer;
 
   @override
   void initState() {
@@ -1598,12 +1613,23 @@ class _RitualScreenState extends State<RitualScreen> with TickerProviderStateMix
     final count = widget.spread.positionsZh.length;
     _slots = List<_RitualCardData?>.filled(count, null);
     _flipCtrls = List.generate(count, (_) => AnimationController(vsync: this, duration: const Duration(milliseconds: 550)));
-    _enterCtrl = AnimationController(vsync: this, duration: const Duration(milliseconds: 500))..forward();
+    _enterCtrl = AnimationController(vsync: this, duration: const Duration(milliseconds: 500))
+      ..addStatusListener((s) {
+        if (s == AnimationStatus.completed) _markBooted();
+      })
+      ..forward();
+    _bootTimer = Timer(const Duration(milliseconds: 620), _markBooted);
     _flyCtrl = AnimationController(vsync: this, duration: const Duration(milliseconds: 650));
     _flyCtrl.addStatusListener((s) {
       if (s == AnimationStatus.completed) _landCard();
     });
     _hintCtrl = AnimationController(vsync: this, duration: const Duration(milliseconds: 900))..repeat(reverse: true);
+  }
+
+  void _markBooted() {
+    _bootTimer?.cancel();
+    if (_booted || !mounted) return;
+    setState(() => _booted = true);
   }
 
   bool get _allDrawn => _drawnCount >= _slots.length;
@@ -1623,39 +1649,109 @@ class _RitualScreenState extends State<RitualScreen> with TickerProviderStateMix
     return (pos: Offset(x, y), angle: (t - 0.5) * (isRowA ? 0.34 : 0.26));
   }
 
-  Offset _slotTopLeft(int i) {
-    const gap = 10.0;
-    final n = _slots.length;
+  ({List<Offset> centers, List<double> angles, Size size}) _spreadLayoutSpec() {
+    final name = widget.spread.nameZh;
+    const gap = 12.0;
+    if (name.contains('圣三角')) {
+      const px = _cardW + gap;
+      const py = _cardH + 8;
+      return (
+        centers: const [Offset(-px / 2, 0), Offset(px / 2, 0), Offset(0, py)],
+        angles: const [0.0, 0.0, 0.0],
+        size: const Size(_cardW, _cardH),
+      );
+    }
+    if (name.contains('大十字')) {
+      const px = _cardW + gap;
+      const py = _cardH + gap;
+      return (
+        centers: const [Offset(0, -py), Offset(-px, 0), Offset(px, 0), Offset(0, py), Offset(0, 0)],
+        angles: const [0.0, 0.0, 0.0, 0.0, 0.0],
+        size: const Size(_cardW, _cardH),
+      );
+    }
+    if (name.contains('二择一')) {
+      return (
+        centers: const [Offset(0, 130), Offset(-70, 20), Offset(70, 20), Offset(-105, -105), Offset(105, -105)],
+        angles: const [0.0, 0.0, 0.0, 0.0, 0.0],
+        size: const Size(_cardW, _cardH),
+      );
+    }
+    if (name.contains('凯尔特')) {
+      const px = 50.0, py = 76.0;
+      return (
+        centers: const [
+          Offset(0, 0), Offset(0, 0), Offset(0, py), Offset(-px, 0), Offset(0, -py), Offset(px, 0),
+          Offset(105, py), Offset(105, 0), Offset(105, -py), Offset(105, -py * 2),
+        ],
+        angles: const [0.0, pi / 2, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0],
+        size: const Size(42, 68),
+      );
+    }
+    final n = max(1, _slots.length);
+    const dGap = 10.0;
     final perRow = min(n, 5);
-    final rows = (n / perRow).ceil();
-    final row = i ~/ perRow;
-    final col = i % perRow;
-    final rowCount = row == rows - 1 ? n - perRow * row : perRow;
-    final rowW = rowCount * _cardW + (rowCount - 1) * gap;
-    final left = (_canvasSize.width - rowW) / 2 + col * (_cardW + gap);
-    final totalH = rows * _cardH + (rows - 1) * gap;
-    final top = (_canvasSize.height * 0.44 - 10) - totalH / 2 + row * (_cardH + gap);
-    return Offset(left, top);
+    final rows = max(1, (n / perRow).ceil());
+    final px = _cardW + dGap, py = _cardH + dGap;
+    final centers = List.generate(n, (i) {
+      final row = i ~/ perRow;
+      final col = i % perRow;
+      final rowCount = row == rows - 1 ? n - perRow * row : perRow;
+      return Offset((col - (rowCount - 1) / 2) * px, (row - (rows - 1) / 2) * py);
+    });
+    return (centers: centers, angles: List.filled(n, 0.0), size: const Size(_cardW, _cardH));
+  }
+
+  ({Offset pos, Size size, double angle}) _slotLayout(int i) {
+    final spec = _spreadLayoutSpec();
+    final size = spec.size;
+    double minX = 0, maxX = 0, minY = 0, maxY = 0;
+    for (var k = 0; k < spec.centers.length; k++) {
+      final c = spec.centers[k];
+      final rotated = spec.angles[k].abs() > 0.01;
+      final hw = (rotated ? size.height : size.width) / 2;
+      final hh = (rotated ? size.width : size.height) / 2;
+      minX = min(minX, c.dx - hw);
+      maxX = max(maxX, c.dx + hw);
+      minY = min(minY, c.dy - hh);
+      maxY = max(maxY, c.dy + hh);
+    }
+    final blockW = max(1.0, maxX - minX);
+    final blockH = max(1.0, maxY - minY);
+    const bandTop = 165.0;
+    final bandBottom = _canvasSize.height - 350;
+    final bandH = max(120.0, bandBottom - bandTop);
+    final bandW = max(120.0, _canvasSize.width - 32);
+    final scale = min(1.0, min(bandW / blockW, bandH / blockH));
+    final cx = _canvasSize.width / 2;
+    final cy = bandTop + bandH / 2;
+    final c = spec.centers[i] * scale;
+    final s = Size(size.width * scale, size.height * scale);
+    return (pos: Offset(cx + c.dx - s.width / 2, cy + c.dy - s.height / 2), size: s, angle: spec.angles[i]);
   }
 
   void _onPileTap(int index) {
-    if (_flight != null || _allDrawn || _enterCtrl.isAnimating) return;
+    if (_flight != null || _allDrawn || (_enterCtrl.isAnimating && !_booted)) return;
     final layout = _pileCardLayout(index);
     final card = _pile[index];
     final slotIndex = _drawnCount;
-    final slotTopLeft = _slotTopLeft(slotIndex);
+    final slot = _slotLayout(slotIndex);
     setState(() {
       _pile.removeAt(index);
       _flight = _FlightData(
         card: card,
         from: layout.pos,
-        to: Offset(slotTopLeft.dx + (_cardW - _pileCardW) / 2, slotTopLeft.dy + (_cardH - _pileCardH) / 2),
+        to: Offset(slot.pos.dx + (slot.size.width - _pileCardW) / 2, slot.pos.dy + (slot.size.height - _pileCardH) / 2),
         fromAngle: layout.angle,
         reversed: Random().nextBool(),
         slotIndex: slotIndex,
       );
     });
     _flyCtrl.forward(from: 0);
+    final flightRef = _flight;
+    Timer(const Duration(milliseconds: 800), () {
+      if (mounted && identical(_flight, flightRef)) _landCard();
+    });
   }
 
   void _landCard() {
@@ -1670,11 +1766,16 @@ class _RitualScreenState extends State<RitualScreen> with TickerProviderStateMix
       _flight = null;
     });
     AudioManager().playSfx('audio/card_flip.mp3');
-    _flipCtrls[f.slotIndex].forward();
+    final flipCtrl = _flipCtrls[f.slotIndex];
+    flipCtrl.forward();
+    Timer(const Duration(milliseconds: 700), () {
+      if (mounted && flipCtrl.value < 0.5) flipCtrl.value = 1.0;
+    });
   }
 
   @override
   void dispose() {
+    _bootTimer?.cancel();
     _enterCtrl.dispose();
     _flyCtrl.dispose();
     _hintCtrl.dispose();
@@ -1767,9 +1868,13 @@ class _RitualScreenState extends State<RitualScreen> with TickerProviderStateMix
         ),
         child: LayoutBuilder(
           builder: (context, constraints) {
-            _canvasSize = Size(constraints.maxWidth, constraints.maxHeight);
+            final mq = MediaQuery.of(context).size;
+            _canvasSize = Size(
+              constraints.maxWidth.isFinite && constraints.maxWidth > 0 ? constraints.maxWidth : mq.width,
+              constraints.maxHeight.isFinite && constraints.maxHeight > 0 ? constraints.maxHeight : mq.height,
+            );
             return AnimatedBuilder(
-              animation: Listenable.merge([_enterCtrl, _flyCtrl, _hintCtrl]),
+              animation: Listenable.merge([_enterCtrl, _flyCtrl]),
               builder: (context, _) {
                 return Stack(
                   children: [
@@ -1791,7 +1896,7 @@ class _RitualScreenState extends State<RitualScreen> with TickerProviderStateMix
 
   Widget _buildPrompt(List<String> positions) {
     if (_allDrawn) return const SizedBox.shrink();
-    final fade = Curves.easeOut.transform(((_enterCtrl.value - 0.2) / 0.6).clamp(0.0, 1.0));
+    final fade = _booted ? 1.0 : Curves.easeOut.transform(((_enterCtrl.value - 0.2) / 0.6).clamp(0.0, 1.0));
     return Positioned(
       top: 96, left: 0, right: 0,
       child: Opacity(
@@ -1821,29 +1926,31 @@ class _RitualScreenState extends State<RitualScreen> with TickerProviderStateMix
 
   Widget _buildHint() {
     if (_allDrawn) return const SizedBox.shrink();
-    final bob = sin(_hintCtrl.value * pi) * 5;
-    const pulse = 0.55;
-    final alpha = pulse + (1 - pulse) * sin(_hintCtrl.value * pi);
-    final appear = Curves.easeOut.transform(((_enterCtrl.value - 0.3) / 0.7).clamp(0.0, 1.0));
+    final appear = _booted ? 1.0 : Curves.easeOut.transform(((_enterCtrl.value - 0.3) / 0.7).clamp(0.0, 1.0));
     return Positioned(
       bottom: 298, left: 0, right: 0,
-      child: Opacity(
-        opacity: alpha * appear,
-        child: Transform.translate(
-          offset: Offset(0, bob),
-          child: Column(
-            children: [
-              Text(
-                tr(widget.lang, '从下方牌堆点击抽牌', 'Tap a card from the deck below', 'Ketik kad dari dek di bawah'),
-                textAlign: TextAlign.center,
-                style: TextStyle(
-                  color: AppColors.gold.withOpacity(0.9), fontSize: 13, fontWeight: FontWeight.w600,
-                  shadows: [Shadow(color: AppColors.goldGlow, blurRadius: 8)],
-                ),
+      child: AnimatedBuilder(
+        animation: _hintCtrl,
+        builder: (context, child) {
+          final wave = sin(_hintCtrl.value * pi);
+          const pulse = 0.55;
+          return Opacity(
+            opacity: (pulse + (1 - pulse) * wave) * appear,
+            child: Transform.translate(offset: Offset(0, wave * 5), child: child),
+          );
+        },
+        child: Column(
+          children: [
+            Text(
+              tr(widget.lang, '从下方牌堆点击抽牌', 'Tap a card from the deck below', 'Ketik kad dari dek di bawah'),
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                color: AppColors.gold.withOpacity(0.9), fontSize: 13, fontWeight: FontWeight.w600,
+                shadows: [Shadow(color: AppColors.goldGlow, blurRadius: 8)],
               ),
-              Icon(Icons.keyboard_double_arrow_down_rounded, color: AppColors.gold.withOpacity(0.8), size: 20),
-            ],
-          ),
+            ),
+            Icon(Icons.keyboard_double_arrow_down_rounded, color: AppColors.gold.withOpacity(0.8), size: 20),
+          ],
         ),
       ),
     );
@@ -1851,34 +1958,37 @@ class _RitualScreenState extends State<RitualScreen> with TickerProviderStateMix
 
   List<Widget> _buildSlots() {
     return List.generate(_slots.length, (i) {
-      final topLeft = _slotTopLeft(i);
+      final lay = _slotLayout(i);
       final data = _slots[i];
-      final appear = Curves.easeOut.transform(((_enterCtrl.value - 0.15 - i * 0.03) / 0.5).clamp(0.0, 1.0));
+      final appear = _booted ? 1.0 : Curves.easeOut.transform(((_enterCtrl.value - 0.15 - i * 0.03) / 0.5).clamp(0.0, 1.0));
       return Positioned(
         key: ValueKey('slot_$i'),
-        left: topLeft.dx, top: topLeft.dy,
-        width: _cardW, height: _cardH,
+        left: lay.pos.dx, top: lay.pos.dy,
+        width: lay.size.width, height: lay.size.height,
         child: Opacity(
           opacity: appear,
-          child: data == null
-              ? _emptySlot(i)
-              : AnimatedBuilder(
-                  animation: _flipCtrls[i],
-                  builder: (context, _) {
-                    final v = _flipCtrls[i].value;
-                    return Transform(
-                      alignment: Alignment.center,
-                      transform: Matrix4.identity()..setEntry(3, 2, 0.001)..rotateY(v * pi),
-                      child: v >= 0.5
-                          ? Transform(
-                              alignment: Alignment.center,
-                              transform: Matrix4.identity()..rotateY(pi),
-                              child: _faceCard(data, _cardW, _cardH),
-                            )
-                          : _backCard(_cardW, _cardH),
-                    );
-                  },
-                ),
+          child: Transform.rotate(
+            angle: lay.angle,
+            child: data == null
+                ? _emptySlot(i)
+                : AnimatedBuilder(
+                    animation: _flipCtrls[i],
+                    builder: (context, _) {
+                      final v = _flipCtrls[i].value;
+                      return Transform(
+                        alignment: Alignment.center,
+                        transform: Matrix4.identity()..setEntry(3, 2, 0.001)..rotateY(v * pi),
+                        child: v >= 0.5
+                            ? Transform(
+                                alignment: Alignment.center,
+                                transform: Matrix4.identity()..rotateY(pi),
+                                child: _faceCard(data, lay.size.width, lay.size.height),
+                              )
+                            : _backCard(lay.size.width, lay.size.height),
+                      );
+                    },
+                  ),
+          ),
         ),
       );
     });
@@ -1887,7 +1997,7 @@ class _RitualScreenState extends State<RitualScreen> with TickerProviderStateMix
   Widget _buildPile() {
     final animating = _enterCtrl.isAnimating;
     final done = _allDrawn;
-    final eased = Curves.easeOutCubic.transform(_enterCtrl.value);
+    final eased = _booted ? 1.0 : Curves.easeOutCubic.transform(_enterCtrl.value);
     return Positioned.fill(
       child: IgnorePointer(
         ignoring: done,
