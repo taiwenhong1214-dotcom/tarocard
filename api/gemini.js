@@ -1,8 +1,8 @@
 const MODEL_QUEUE = [
   "nvidia/nemotron-3-ultra-550b-a55b:free",
-  "openai/gpt-oss-120b:free",
-  "poolside/laguna-m.1:free",
-  "z-ai/glm-4.5-air:free",
+  "thinkingmachines/inkling:free",
+  "nvidia/nemotron-3-super-120b-a12b:free",
+  "google/gemma-4-31b-it:free",
 ];
 
 module.exports = async function handler(req, res) {
