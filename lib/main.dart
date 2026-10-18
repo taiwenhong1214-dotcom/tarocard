@@ -1576,69 +1576,178 @@ class RitualScreen extends StatefulWidget {
   _RitualScreenState createState() => _RitualScreenState();
 }
 class _RitualScreenState extends State<RitualScreen> with TickerProviderStateMixin {
+  static const int _pileCount = 15;
+  static const double _cardW = 56, _cardH = 92;
+  static const double _pileCardW = 50, _pileCardH = 80;
+
+  final List<TarotCard> _pile = [];
+  late final List<_RitualCardData?> _slots;
+  late final List<AnimationController> _flipCtrls;
+  int _drawnCount = 0;
+
+  late AnimationController _enterCtrl;
   late AnimationController _flyCtrl;
-  late List<Offset> _cardOffsets;
-  final List<_RitualCardData> _cards = [];
-  final List<AnimationController> _flipCtrls = [];
-  int _currentFlipIndex = -1;
-  bool _allRevealed = false;
+  _FlightData? _flight;
+  Size _canvasSize = Size.zero;
 
   @override
   void initState() {
     super.initState();
     final deck = List<TarotCard>.from(tarotDeck)..shuffle();
+    _pile.addAll(deck.take(_pileCount));
     final count = widget.spread.positionsZh.length;
-    final positions = widget.spread.positions(widget.lang);
-    for (int i = 0; i < count; i++) {
-      _cards.add(_RitualCardData(
-        card: deck[i],
-        isReversed: Random().nextBool(),
-        positionMeaning: positions[i],
-      ));
-      _flipCtrls.add(AnimationController(vsync: this, duration: const Duration(milliseconds: 500)));
-    }
-    _cardOffsets = List.generate(count, (_) => Offset(-200.0, Random().nextDouble() * 600));
-    _flyCtrl = AnimationController(vsync: this, duration: const Duration(seconds: 4));
+    _slots = List<_RitualCardData?>.filled(count, null);
+    _flipCtrls = List.generate(count, (_) => AnimationController(vsync: this, duration: const Duration(milliseconds: 550)));
+    _enterCtrl = AnimationController(vsync: this, duration: const Duration(milliseconds: 900))..forward();
+    _flyCtrl = AnimationController(vsync: this, duration: const Duration(milliseconds: 650));
     _flyCtrl.addStatusListener((s) {
-      if (s == AnimationStatus.completed) _startReveal();
+      if (s == AnimationStatus.completed) _landCard();
     });
-    _flyCtrl.addListener(() => setState(() {
-      for (int i = 0; i < count; i++) {
-        final t = (_flyCtrl.value * 1.4 - i * 0.15).clamp(0.0, 1.0);
-        final x = -200 + (320 + i * 45.0) * (1 - pow(1 - t, 3));
-        final y = 300 + sin(t * pi + i * 0.5) * 40;
-        _cardOffsets[i] = Offset(x, y);
-      }
-    }));
-    _flyCtrl.forward();
   }
 
-  void _startReveal() {
-    _revealNext(0);
+  bool get _allDrawn => _drawnCount >= _slots.length;
+
+  ({Offset pos, double angle}) _pileCardLayout(int i) {
+    final n = _pile.length;
+    final spacing = n > 1 ? min(24.0, (_canvasSize.width - 40 - _pileCardW) / (n - 1)) : 0.0;
+    final totalW = _pileCardW + spacing * (n - 1);
+    final t = n > 1 ? i / (n - 1) : 0.5;
+    final x = (_canvasSize.width - totalW) / 2 + spacing * i;
+    final y = _canvasSize.height - 158 - sin(pi * t) * 16 + (t - 0.5).abs() * 26;
+    return (pos: Offset(x, y), angle: (t - 0.5) * 0.46);
   }
 
-  void _revealNext(int i) {
-    if (i >= _flipCtrls.length) {
-      setState(() => _allRevealed = true);
-      return;
-    }
-    setState(() => _currentFlipIndex = i);
-    _flipCtrls[i].forward().then((_) {
-      AudioManager().playSfx('audio/card_flip.mp3');
-      Future.delayed(const Duration(milliseconds: 400), () => _revealNext(i + 1));
+  Offset _slotTopLeft(int i) {
+    const gap = 10.0;
+    final n = _slots.length;
+    final perRow = min(n, 5);
+    final rows = (n / perRow).ceil();
+    final row = i ~/ perRow;
+    final col = i % perRow;
+    final rowCount = row == rows - 1 ? n - perRow * row : perRow;
+    final rowW = rowCount * _cardW + (rowCount - 1) * gap;
+    final left = (_canvasSize.width - rowW) / 2 + col * (_cardW + gap);
+    final totalH = rows * _cardH + (rows - 1) * gap;
+    final top = (_canvasSize.height / 2 - 10) - totalH / 2 + row * (_cardH + gap);
+    return Offset(left, top);
+  }
+
+  void _onPileTap(int index) {
+    if (_flight != null || _allDrawn || _enterCtrl.isAnimating) return;
+    final layout = _pileCardLayout(index);
+    final card = _pile[index];
+    final slotIndex = _drawnCount;
+    final slotTopLeft = _slotTopLeft(slotIndex);
+    setState(() {
+      _pile.removeAt(index);
+      _flight = _FlightData(
+        card: card,
+        from: layout.pos,
+        to: Offset(slotTopLeft.dx + (_cardW - _pileCardW) / 2, slotTopLeft.dy + (_cardH - _pileCardH) / 2),
+        fromAngle: layout.angle,
+        reversed: Random().nextBool(),
+        slotIndex: slotIndex,
+      );
     });
+    _flyCtrl.forward(from: 0);
+  }
+
+  void _landCard() {
+    final f = _flight;
+    if (f == null) return;
+    final positions = widget.spread.positions(widget.lang);
+    setState(() {
+      _slots[f.slotIndex] = _RitualCardData(
+        card: f.card, isReversed: f.reversed, positionMeaning: positions[f.slotIndex],
+      );
+      _drawnCount++;
+      _flight = null;
+    });
+    AudioManager().playSfx('audio/card_flip.mp3');
+    _flipCtrls[f.slotIndex].forward();
   }
 
   @override
   void dispose() {
+    _enterCtrl.dispose();
     _flyCtrl.dispose();
     for (final c in _flipCtrls) c.dispose();
     super.dispose();
   }
 
+  Widget _backCard(double w, double h) {
+    return Container(
+      width: w, height: h,
+      decoration: BoxDecoration(
+        gradient: const LinearGradient(
+          begin: Alignment.topLeft, end: Alignment.bottomRight,
+          colors: [Color(0xFF2A2050), Color(0xFF120B28)],
+        ),
+        borderRadius: BorderRadius.circular(7),
+        border: Border.all(color: AppColors.gold.withOpacity(0.55), width: 1),
+        boxShadow: [BoxShadow(color: AppColors.goldGlow.withOpacity(0.45), blurRadius: 6)],
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(3),
+        child: Container(
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(5),
+            border: Border.all(color: AppColors.gold.withOpacity(0.25), width: 0.7),
+          ),
+          child: Center(
+            child: Icon(Icons.auto_awesome, size: w * 0.3, color: AppColors.gold.withOpacity(0.8)),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _faceCard(_RitualCardData data, double w, double h) {
+    return Container(
+      width: w, height: h,
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(7),
+        border: Border.all(
+          color: data.isReversed ? Colors.redAccent.withOpacity(0.6) : AppColors.gold,
+          width: 1.2,
+        ),
+      ),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(6),
+        child: Transform(
+          alignment: Alignment.center,
+          transform: Matrix4.identity()..rotateZ(data.isReversed ? pi : 0),
+          child: Image.asset(
+            'assets/images/${data.card.img}',
+            width: w, height: h,
+            fit: BoxFit.cover,
+            errorBuilder: (_, __, ___) => Container(
+              color: AppColors.bgCard,
+              child: Center(child: Text(data.card.nameZh,
+                  style: const TextStyle(color: AppColors.textPrimary, fontSize: 9),
+                  textAlign: TextAlign.center)),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _emptySlot(int i) {
+    return Container(
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(7),
+        border: Border.all(color: Colors.white.withOpacity(0.14)),
+        color: Colors.white.withOpacity(0.02),
+      ),
+      child: Center(
+        child: Text('${i + 1}', style: TextStyle(color: Colors.white.withOpacity(0.3), fontSize: 15)),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
-    final count = _cards.length;
     final positions = widget.spread.positions(widget.lang);
     return Scaffold(
       extendBodyBehindAppBar: true,
@@ -1649,113 +1758,175 @@ class _RitualScreenState extends State<RitualScreen> with TickerProviderStateMix
           gradient: LinearGradient(begin: Alignment.topCenter, end: Alignment.bottomCenter,
             colors: [AppColors.bgTop, AppColors.bgBottom]),
         ),
-        child: Stack(
+        child: LayoutBuilder(
+          builder: (context, constraints) {
+            _canvasSize = Size(constraints.maxWidth, constraints.maxHeight);
+            return AnimatedBuilder(
+              animation: Listenable.merge([_enterCtrl, _flyCtrl]),
+              builder: (context, _) {
+                return Stack(
+                  children: [
+                    ..._buildSlots(),
+                    ..._buildPile(),
+                    _buildPrompt(positions),
+                    if (_flight != null) _buildFlyingCard(),
+                    if (_allDrawn) _buildStartButton(),
+                  ],
+                );
+              },
+            );
+          },
+        ),
+      ),
+    );
+  }
+
+  Widget _buildPrompt(List<String> positions) {
+    if (_allDrawn) return const SizedBox.shrink();
+    final fade = Curves.easeOut.transform(((_enterCtrl.value - 0.2) / 0.6).clamp(0.0, 1.0));
+    return Positioned(
+      top: 96, left: 0, right: 0,
+      child: Opacity(
+        opacity: fade,
+        child: Column(
           children: [
-            ...List.generate(count, (i) {
-              final isFaceUp = _flipCtrls[i].value >= 0.5;
-              return Positioned(
-                left: _cardOffsets[i].dx, top: _cardOffsets[i].dy,
-                child: Transform.rotate(
-                  angle: sin(_flyCtrl.value * pi * 2 + i) * 0.2,
-                  child: SizedBox(
-                    width: 60, height: 100,
-                    child: Stack(
-                      children: [
-                        // Card back (hidden when face up)
-                        AnimatedOpacity(
-                          opacity: isFaceUp ? 0 : 1,
-                          duration: const Duration(milliseconds: 100),
-                          child: Container(
-                            width: 60, height: 100,
-                            decoration: BoxDecoration(
-                              color: AppColors.cardBackDark,
-                              borderRadius: BorderRadius.circular(8),
-                              border: Border.all(color: AppColors.gold.withOpacity(0.4)),
-                              boxShadow: [BoxShadow(color: AppColors.goldGlow.withOpacity(0.2), blurRadius: 8)],
-                            ),
-                            child: Center(child: Text('${i + 1}',
-                                style: const TextStyle(color: AppColors.gold, fontSize: 20, fontWeight: FontWeight.bold))),
-                          ),
-                        ),
-                        // Card face (visible when flipped)
-                        if (_flipCtrls[i].value >= 0.5)
-                          Transform(
-                            alignment: Alignment.center,
-                            transform: Matrix4.identity()..rotateY(pi),
-                            child: Container(
-                              width: 60, height: 100,
-                              decoration: BoxDecoration(
-                                borderRadius: BorderRadius.circular(8),
-                                border: Border.all(
-                                  color: _cards[i].isReversed ? Colors.redAccent.withOpacity(0.6) : AppColors.gold,
-                                  width: 1.5,
-                                ),
-                              ),
-                              child: ClipRRect(
-                                borderRadius: BorderRadius.circular(7),
-                                child: Transform(
-                                  alignment: Alignment.center,
-                                  transform: Matrix4.identity()..rotateZ(_cards[i].isReversed ? pi : 0),
-                                  child: Image.asset(
-                                    'assets/images/${_cards[i].card.img}',
-                                    width: 60, height: 100,
-                                    fit: BoxFit.cover,
-                                    errorBuilder: (_, __, ___) => Container(
-                                      color: AppColors.bgCard,
-                                      child: Center(child: Text(_cards[i].card.nameZh,
-                                          style: const TextStyle(color: AppColors.textPrimary, fontSize: 9),
-                                          textAlign: TextAlign.center)),
-                                    ),
-                                  ),
-                                ),
-                              ),
-                            ),
-                          ),
-                      ],
-                    ),
-                  ),
-                ),
-              );
-            }),
-            if (_currentFlipIndex >= 0 && _currentFlipIndex < count)
-              Positioned(
-                top: 20, left: 0, right: 0,
-                child: Center(
-                  child: Text(
-                    positions[_currentFlipIndex],
-                    style: const TextStyle(color: AppColors.gold, fontSize: 14, fontWeight: FontWeight.bold,
-                        shadows: [Shadow(color: AppColors.goldGlow, blurRadius: 8)]),
-                    textAlign: TextAlign.center,
-                  ),
-                ),
-              ),
-            if (_allRevealed)
-              Positioned(
-                bottom: 60, left: 0, right: 0,
-                child: GestureDetector(
-                  onTap: () {
-                    AudioManager().playSfx('audio/magic_start.mp3');
-                    final drawnCards = _cards.map((c) => DrawnCard(
-                      card: c.card, isReversed: c.isReversed, positionMeaning: c.positionMeaning,
-                    )).toList();
-                    Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => ReadingScreen(
-                      cards: drawnCards, topic: widget.topic, spread: widget.spread,
-                      lang: widget.lang, userQuestion: widget.userQuestion,
-                    )));
-                  },
-                  child: Container(
-                    margin: const EdgeInsets.symmetric(horizontal: 60),
-                    height: 50,
-                    decoration: BoxDecoration(
-                      color: AppColors.primary, borderRadius: BorderRadius.circular(25),
-                      boxShadow: [BoxShadow(color: AppColors.primary.withOpacity(0.4), blurRadius: 12)],
-                    ),
-                    child: Center(child: Text(tr(widget.lang, '开始解读', 'Begin Reading', 'Mula Bacaan'),
-                        style: const TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.w600))),
-                  ),
-                ),
-              ),
+            Text(
+              widget.lang == AppLanguage.en
+                  ? 'Draw card ${_drawnCount + 1} of ${_slots.length}'
+                  : widget.lang == AppLanguage.ms
+                  ? 'Cabut kad ${_drawnCount + 1} daripada ${_slots.length}'
+                  : '抽取第 ${_drawnCount + 1} / ${_slots.length} 张牌',
+              style: const TextStyle(color: AppColors.gold, fontSize: 16, fontWeight: FontWeight.bold,
+                  shadows: [Shadow(color: AppColors.goldGlow, blurRadius: 8)]),
+            ),
+            const SizedBox(height: 6),
+            Text(
+              positions[_drawnCount],
+              textAlign: TextAlign.center,
+              style: const TextStyle(color: AppColors.textSecondary, fontSize: 13),
+            ),
+            const SizedBox(height: 6),
+            Text(
+              tr(widget.lang, '凭直觉点击牌堆中的任意一张牌', 'Trust your instinct and tap any card', 'Ikut gerak hati, ketik mana-mana kad'),
+              style: TextStyle(color: Colors.white.withOpacity(0.35), fontSize: 11),
+            ),
           ],
+        ),
+      ),
+    );
+  }
+
+  List<Widget> _buildSlots() {
+    return List.generate(_slots.length, (i) {
+      final topLeft = _slotTopLeft(i);
+      final data = _slots[i];
+      final appear = Curves.easeOut.transform(((_enterCtrl.value - 0.15 - i * 0.03) / 0.5).clamp(0.0, 1.0));
+      return Positioned(
+        key: ValueKey('slot_$i'),
+        left: topLeft.dx, top: topLeft.dy,
+        width: _cardW, height: _cardH,
+        child: Opacity(
+          opacity: appear,
+          child: data == null
+              ? _emptySlot(i)
+              : AnimatedBuilder(
+                  animation: _flipCtrls[i],
+                  builder: (context, _) {
+                    final v = _flipCtrls[i].value;
+                    return Transform(
+                      alignment: Alignment.center,
+                      transform: Matrix4.identity()..setEntry(3, 2, 0.001)..rotateY(v * pi),
+                      child: v >= 0.5
+                          ? Transform(
+                              alignment: Alignment.center,
+                              transform: Matrix4.identity()..rotateY(pi),
+                              child: _faceCard(data, _cardW, _cardH),
+                            )
+                          : _backCard(_cardW, _cardH),
+                    );
+                  },
+                ),
+        ),
+      );
+    });
+  }
+
+  List<Widget> _buildPile() {
+    final animating = _enterCtrl.isAnimating;
+    final done = _allDrawn;
+    return List.generate(_pile.length, (i) {
+      final layout = _pileCardLayout(i);
+      final t = ((_enterCtrl.value - i * 0.028) / (1 - 0.028 * (_pileCount - 1))).clamp(0.0, 1.0);
+      final eased = Curves.easeOutCubic.transform(t);
+      return AnimatedPositioned(
+        key: ObjectKey(_pile[i]),
+        duration: animating ? Duration.zero : const Duration(milliseconds: 350),
+        curve: Curves.easeOutCubic,
+        left: layout.pos.dx,
+        top: layout.pos.dy + (1 - eased) * 180 + (done ? 160 : 0),
+        width: _pileCardW,
+        height: _pileCardH,
+        child: AnimatedOpacity(
+          duration: const Duration(milliseconds: 350),
+          opacity: done ? 0.0 : eased,
+          child: GestureDetector(
+            behavior: HitTestBehavior.opaque,
+            onTap: () => _onPileTap(i),
+            child: Transform.rotate(
+              angle: layout.angle,
+              child: _backCard(_pileCardW, _pileCardH),
+            ),
+          ),
+        ),
+      );
+    });
+  }
+
+  Widget _buildFlyingCard() {
+    final f = _flight!;
+    final t = Curves.easeInOutCubic.transform(_flyCtrl.value);
+    final pos = Offset.lerp(f.from, f.to, t)!;
+    final y = pos.dy - sin(pi * _flyCtrl.value) * 30;
+    final scale = 1 + sin(pi * _flyCtrl.value) * 0.16;
+    return Positioned(
+      left: pos.dx, top: y,
+      width: _pileCardW, height: _pileCardH,
+      child: IgnorePointer(
+        child: Transform.scale(
+          scale: scale,
+          child: Transform.rotate(
+            angle: f.fromAngle * (1 - t),
+            child: _backCard(_pileCardW, _pileCardH),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildStartButton() {
+    return Positioned(
+      bottom: 56, left: 0, right: 0,
+      child: GestureDetector(
+        onTap: () {
+          AudioManager().playSfx('audio/magic_start.mp3');
+          final drawnCards = _slots.map((c) => DrawnCard(
+            card: c!.card, isReversed: c.isReversed, positionMeaning: c.positionMeaning,
+          )).toList();
+          Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => ReadingScreen(
+            cards: drawnCards, topic: widget.topic, spread: widget.spread,
+            lang: widget.lang, userQuestion: widget.userQuestion,
+          )));
+        },
+        child: Container(
+          margin: const EdgeInsets.symmetric(horizontal: 60),
+          height: 52,
+          decoration: BoxDecoration(
+            gradient: const LinearGradient(colors: [Color(0xFFF0DCA8), Color(0xFFC29A4A)]),
+            borderRadius: BorderRadius.circular(26),
+            boxShadow: [BoxShadow(color: AppColors.gold.withOpacity(0.35), blurRadius: 14)],
+          ),
+          child: Center(child: Text(tr(widget.lang, '开始解读', 'Begin Reading', 'Mula Bacaan'),
+              style: const TextStyle(color: Color(0xFF3A2A10), fontSize: 16, fontWeight: FontWeight.bold))),
         ),
       ),
     );
@@ -1767,6 +1938,19 @@ class _RitualCardData {
   final bool isReversed;
   final String positionMeaning;
   _RitualCardData({required this.card, required this.isReversed, required this.positionMeaning});
+}
+
+class _FlightData {
+  final TarotCard card;
+  final Offset from;
+  final Offset to;
+  final double fromAngle;
+  final bool reversed;
+  final int slotIndex;
+  _FlightData({
+    required this.card, required this.from, required this.to,
+    required this.fromAngle, required this.reversed, required this.slotIndex,
+  });
 }
 
 // ================= 历史记录界面 =================
